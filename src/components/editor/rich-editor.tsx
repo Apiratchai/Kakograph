@@ -17,6 +17,7 @@ import Typography from '@tiptap/extension-typography';
 import { common, createLowlight } from 'lowlight';
 import Mention from '@tiptap/extension-mention';
 import { getSuggestionConfig } from './suggestion';
+import { compressImage } from '@/lib/image-utils';
 import { useCallback, useEffect, useState, useRef } from 'react';
 import {
     Bold,
@@ -163,7 +164,28 @@ export function RichEditor({
             attributes: {
                 class: 'rich-editor-content prose prose-invert max-w-none focus:outline-none',
             },
-            // Removed handleKeyDown
+            handlePaste: (view, event) => {
+                const items = Array.from(event.clipboardData?.items || []);
+                const images = items.filter(item => item.type.startsWith('image'));
+
+                if (images.length === 0) return false;
+
+                event.preventDefault();
+
+                images.forEach(item => {
+                    const file = item.getAsFile();
+                    if (file) {
+                        compressImage(file).then(base64 => {
+                            const { schema } = view.state;
+                            const node = schema.nodes.image.create({ src: base64 });
+                            const transaction = view.state.tr.replaceSelectionWith(node);
+                            view.dispatch(transaction);
+                        }).catch(console.error);
+                    }
+                });
+
+                return true;
+            },
         },
         onUpdate: ({ editor }) => {
             // Skip if this update was triggered by setContent
