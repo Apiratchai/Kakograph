@@ -140,12 +140,16 @@ export function useConvexSync(
     const pushAllUnsynced = useCallback(async (notes: EncryptedNote[]) => {
         if (!isEnabled || !client) return;
 
-        const unsynced = notes.filter(n => !n.synced);
-        if (unsynced.length === 0) return;
+        if (!isEnabled || !client) return;
+
+        // Trust the caller (fullSync) - if passed here, it needs pushing regardless of synced flag
+        if (notes.length === 0) return;
+
+        console.log(`[Sync] Pushing batch of ${notes.length} notes to Cloud`);
 
         try {
             await client.mutation(api.notes.bulkUpsertNotes, {
-                notes: unsynced.map(toConvexFormat),
+                notes: notes.map(toConvexFormat),
             });
         } catch (error) {
             console.error('Failed to bulk push notes to Convex:', error);

@@ -59,7 +59,24 @@ Kakograph is built with Next.js, making **Vercel** the ideal host.
 - Global CDN for static assets.
 - [Deploy to Vercel](https://vercel.com/new)
 
-### 2. Backend: Convex Cloud
+### 2. Configuration (Environment Variables)
+
+**For Vercel (Production):**
+Add these to your Project Settings -> Environment Variables:
+- `NEXT_PUBLIC_CONVEX_URL`: Your Production URL (e.g., `https://example-project.convex.cloud`)
+- `CONVEX_DEPLOY_KEY`: Your Admin Key (from Convex Dashboard -> Settings -> Deployment)
+
+**For New Developers (Cloning):**
+1. **Automatic Setup:**
+   Run `npx convex dev`. This creates a new Personal Project for you and configures `.env.local` automatically.
+   
+2. **Connect to Existing Project:**
+   If you want to collaborate on an existing project, ask the owner for the URL and add it to `.env.local`:
+   ```bash
+   NEXT_PUBLIC_CONVEX_URL=https://target-project-name.convex.cloud
+   ```
+
+### 3. Backend: Convex Cloud
 - **Managed:** Use [Convex Cloud](https://convex.dev) for specialized real-time performance and global caching.
 - **Self-Hosted:** You can run the Convex backend via Docker on any VPS (DigitalOcean, Hetzner, etc.) if data sovereignty is your priority.
 
