@@ -19,6 +19,7 @@ import {
     type SyncStatus,
     createNoteId
 } from '@/lib/storage';
+import { useConvexSync } from '@/lib/convex/sync';
 
 interface DecryptedNote {
     id: string;
@@ -39,6 +40,7 @@ interface NotesState {
     error: string | null;
     trashCount: number;
     trash: DecryptedNote[];
+    encryptedNotes: EncryptedNote[]; // NEW: For sync
 }
 
 export function useNotes() {
@@ -53,6 +55,7 @@ export function useNotes() {
         error: null,
         trashCount: 0,
         trash: [],
+        encryptedNotes: [],
     });
 
     // Initialize storage
@@ -140,9 +143,12 @@ export function useNotes() {
                 ...prev,
                 notes: decryptedNotes,
                 trash: decryptedTrash,
+                encryptedNotes, // Update encrypted notes for sync
                 isLoading: false,
-                // Set current note to most recent if none selected ONLY on initial load
-                currentNote: prev.currentNote || (!silent ? decryptedNotes[0] || null : null),
+                // Update current note with new version if it exists
+                currentNote: prev.currentNote
+                    ? decryptedNotes.find(n => n.id === prev.currentNote!.id) || null
+                    : (!silent ? decryptedNotes[0] || null : null),
                 trashCount: decryptedTrash.length,
             }));
         } catch (err) {
@@ -325,12 +331,12 @@ export function useNotes() {
                 };
             });
 
-            // Refresh logic usually not needed for soft delete if state updated, 
-            // but confirms DB state.
+            // Refresh state to ensure sync service sees the change
+            loadNotes(true);
         } catch (err) {
             console.error('Failed to delete note:', err);
         }
-    }, [storage, state.notes]);
+    }, [storage, state.notes, loadNotes]);
 
     // Restore a note
     const restoreNote = useCallback(async (id: string) => {
@@ -366,10 +372,12 @@ export function useNotes() {
                 notes: prev.notes.map(n => n.id === id ? { ...n, folder } : n),
                 currentNote: prev.currentNote?.id === id ? { ...prev.currentNote, folder } : prev.currentNote
             }));
+
+            loadNotes(true);
         } catch (err) {
             console.error('Failed to move note:', err);
         }
-    }, [storage]);
+    }, [storage, loadNotes]);
 
     // Optimistic local update (as user types)
     const updateNoteLocal = useCallback((content: string) => {
@@ -472,10 +480,12 @@ export function useNotes() {
                     trashCount: newTrash.length,
                 };
             });
+
+            loadNotes(true);
         } catch (err) {
             console.error('Failed to bulk delete notes:', err);
         }
-    }, [storage]);
+    }, [storage, loadNotes]);
 
     // Bulk restoration
     const restoreNotes = useCallback(async (ids: string[]) => {
@@ -509,19 +519,77 @@ export function useNotes() {
         }
     }, [storage, deviceId]);
 
+    // Handle remote updates from Convex
+    const handleRemoteUpdate = useCallback(async (incomingNotes: EncryptedNote[]) => {
+        if (!encryptionKey) return;
+
+        try {
+            console.log('[Hooks] Applying remote updates to DB:', incomingNotes.length);
+            await storage.bulkSave(incomingNotes);
+            console.log('[Hooks] DB Unlocked. Reloading notes...');
+            await loadNotes(true);
+            console.log('[Hooks] Notes reloaded.');
+        } catch (err) {
+            console.error('Failed to apply remote updates:', err);
+        }
+    }, [storage, encryptionKey, loadNotes]);
+
+    // Initialize Sync Service
+    const syncService = useConvexSync(
+        deviceId,
+        state.encryptedNotes,
+        handleRemoteUpdate
+    );
+
+    // Override saveNote to push to sync
+    const originalSaveNote = saveNote;
+    const saveNoteWithSync = useCallback(async (content: string) => {
+        await originalSaveNote(content);
+        // After saving locally, trigger sync (implicit via state.encryptedNotes update -> hook reaction)
+        // But for faster response, we can explicitly push the *current* note if we knew the ID.
+        // Since loadNotes updates state, the hook will pick it up eventually (30s or immediate if depend effect runs).
+        // Actually, let's optimize: saveNote calls loadNotes(true), which updates state.encryptedNotes.
+        // useConvexSync depends on localNotes (state.encryptedNotes), so it will re-evaluate diff.
+    }, [originalSaveNote]);
+
+    // Explicitly push deletions/restores
+    const deleteNoteWithSync = useCallback(async (id: string) => {
+        await deleteNote(id);
+        syncService.pushDelete(id, Date.now());
+    }, [deleteNote, syncService]);
+
+    const hardDeleteWithSync = useCallback(async (id: string) => {
+        await permanentlyDeleteNote(id);
+        syncService.pushHardDelete(id);
+    }, [permanentlyDeleteNote, syncService]);
+
+    const restoreNoteWithSync = useCallback(async (id: string) => {
+        await restoreNote(id);
+        syncService.pushRestore(id);
+    }, [restoreNote, syncService]);
+
+    const moveNoteWithSync = useCallback(async (id: string, folder: string) => {
+        await moveNote(id, folder);
+        // We'd need a pushMove or just let full sync handle the metadata update.
+        // Since useConvexSync does full diff, it should catch the folder change on next sync interval.
+        // To force it, we can trigger fullSync
+        syncService.fullSync();
+    }, [moveNote, syncService]);
+
+
     return {
         ...state,
         loadNotes,
-        saveNote,
+        saveNote: saveNoteWithSync,
         createNewNote,
         selectNote,
-        deleteNote,
+        deleteNote: deleteNoteWithSync,
         deleteNotes,
         importNote,
-        restoreNote,
+        restoreNote: restoreNoteWithSync,
         restoreNotes,
-        permanentlyDeleteNote,
-        moveNote,
+        permanentlyDeleteNote: hardDeleteWithSync,
+        moveNote: moveNoteWithSync,
         updateNoteLocal,
         clearAllNotes // NEW
     };

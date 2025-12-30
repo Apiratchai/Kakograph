@@ -49,7 +49,28 @@ npm run build
 
 ---
 
-## 🛠️ Tech Stack
+## � Deployment
+
+For the best performance (low latency, global edge network), we recommend:
+
+### 1. Frontend: Vercel
+Kakograph is built with Next.js, making **Vercel** the ideal host.
+- Zero-configuration deployment.
+- Global CDN for static assets.
+- [Deploy to Vercel](https://vercel.com/new)
+
+### 2. Backend: Convex Cloud
+- **Managed:** Use [Convex Cloud](https://convex.dev) for specialized real-time performance and global caching.
+- **Self-Hosted:** You can run the Convex backend via Docker on any VPS (DigitalOcean, Hetzner, etc.) if data sovereignty is your priority.
+
+```bash
+# Docker command for self-hosting backend
+docker run -d -p 3210:3210 convexinc/convex-backend
+```
+
+---
+
+## �🛠️ Tech Stack
 
 | Layer | Technology |
 |-------|------------|
@@ -77,8 +98,33 @@ npm run build
 
 ### Important Notes
 - **No server** ever sees your plaintext data
-- **No cross-browser sync** — Data is isolated per browser/profile
+- **No cross-browser sync** — Data is isolated per browser/profile (unless Sync is enabled)
 - Export your backup regularly to avoid data loss
+
+---
+
+## 🌐 Sync Architecture (Technical)
+
+Kakograph uses a **Local-First, Cloud-Optional** architecture.
+
+### 1. Identity & Encryption
+Your **Seed Phrase** is the root secret. We derive two distinct keys to ensure security:
+- **Encryption Key (`AES-256-GCM`)**: Derived using `PBKDF2` (Salt: `kakograph-v1`). Used to encrypt/decrypt note content.
+- **Sync Identity (`Device ID`)**: Derived using `PBKDF2` (Salt: `kakograph-device-v1`). Used to identify "you" on the sync server.
+
+**Benefit:** The server knows *who* you are (Sync ID) to group your data, but can never *read* your data because it never sees the Encryption Key.
+
+### 2. Conflict Resolution
+We use a **Last-Write-Wins (LWW)** strategy based on client-side timestamps:
+- If you edit the same note on two devices, the save with the **later timestamp** overwrites the earlier one.
+- **Deletion** is treated as a property update (`deleted: true`), so deletions also follow LWW.
+
+### 3. Data Flow
+- **Write:** UI &rarr; Local IndexedDB &rarr; Sync Queue (if enabled) &rarr; Convex Mutation
+- **Read:** Local IndexedDB &rarr; UI
+- **Sync:** Convex Subscription (`onUpdate`) &rarr; Local IndexedDB &rarr; UI Refresh
+
+This ensures the app remains **fast and offline-capable** even when sync is enabled.
 
 ---
 
@@ -150,14 +196,21 @@ The app supports full snapshot export/import:
 - [x] Proper handling of legacy backups
 
 #### UI/UX
-- [x] Settings dropdown menu (Lock, Export, Import)
+- [x] Settings dropdown menu (Lock, Export, Import, Sync Settings)
 - [x] Custom modal system (no browser alerts)
 - [x] Mobile-responsive sidebar
 - [x] Modal z-index fixes for mobile
 - [x] Gradient logo matching landing page
 
+#### Cloud Sync (New)
+- [x] Optional sync via Convex
+- [x] Multiple modes: Local Only, Local Convex, Convex Cloud, Custom URL
+- [x] Bidirectional sync (local updates push, remote updates pull)
+- [x] Sync status indicator in header
+- [x] Connection testing and auto-reconnect
+- [x] **Smart Identity**: Syncs across devices using the same Seed Phrase (no extra login required).
+
 ### 🚧 Planned Features
-- [ ] **Cloud sync via Convex** (user-hosted Convex project) — *Schema ready*
 - [ ] Real-time collaboration
 - [ ] Note versioning/history
 - [ ] Full-text search

@@ -125,16 +125,19 @@ export class IndexedDBProvider implements StorageProvider {
 
     async bulkSave(notes: EncryptedNote[]): Promise<string[]> {
         const db = getDB();
-        await db.notes.bulkAdd(notes);
+        await db.notes.bulkPut(notes);
 
-        // Add all to sync queue
-        const syncItems = notes.map((note) => ({
-            id: uuidv4(),
-            noteId: note.id,
-            operation: 'create' as const,
-            timestamp: Date.now(),
-        }));
-        await db.syncQueue.bulkAdd(syncItems);
+        // Add unsynced notes to sync queue
+        const unsyncedNotes = notes.filter(n => !n.synced);
+        if (unsyncedNotes.length > 0) {
+            const syncItems = unsyncedNotes.map((note) => ({
+                id: uuidv4(),
+                noteId: note.id,
+                operation: 'create' as const,
+                timestamp: Date.now(),
+            }));
+            await db.syncQueue.bulkAdd(syncItems);
+        }
 
         return notes.map((n) => n.id);
     }

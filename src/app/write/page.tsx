@@ -11,7 +11,7 @@ import { useRouter } from 'next/navigation';
 import { useAuth } from '@/lib/auth/context';
 import { RichEditor } from '@/components/editor/rich-editor';
 import { useNotes } from '@/lib/notes/hooks';
-import { Menu, Plus, Check, Cloud, CloudOff, Loader2, ChevronLeft, Lock, LockOpen, Download, Upload, Network, PenTool, Folder, FolderPlus, ChevronRight, ChevronDown, Trash2, Settings, Wifi } from 'lucide-react';
+import { Menu, Plus, Check, Cloud, CloudOff, Loader2, ChevronLeft, Lock, LockOpen, Download, Upload, Network, PenTool, Folder, FolderPlus, ChevronRight, ChevronDown, Trash2, Settings, Wifi, RefreshCw } from 'lucide-react';
 import { useConvexConfig, SyncMode } from '@/lib/convex/provider';
 import { PinKeypad } from '@/components/auth/pin-keypad';
 import { Modal } from '@/components/ui/modal';
@@ -307,8 +307,10 @@ export default function WritePage() {
     // Set content when current note changes
     useEffect(() => {
         if (currentNote) {
+            console.log('[UI] CurrentNote changed. ID:', currentNote.id.slice(0, 8), 'Updated:', new Date(currentNote.updatedAt || 0).toLocaleTimeString());
             setContent(currentNote.content);
         } else {
+            console.log('[UI] No current note');
             setContent('');
         }
     }, [currentNote]);
@@ -329,7 +331,7 @@ export default function WritePage() {
                 await saveNote(newContent);
                 setLastSaved(new Date());
             }
-        }, 3000);
+        }, 1000);
     }, [saveNote, updateNoteLocal]);
 
     // Manual save
@@ -716,12 +718,12 @@ export default function WritePage() {
                         <span className="text-sm text-slate-400">Status</span>
                         <div className="flex items-center gap-2">
                             <span className={`text-sm font-medium ${convexConfig.config.mode === 'disabled'
-                                    ? 'text-slate-500'
-                                    : convexConfig.config.isChecking
-                                        ? 'text-blue-400'
-                                        : convexConfig.config.isConnected
-                                            ? 'text-green-400'
-                                            : 'text-orange-400'
+                                ? 'text-slate-500'
+                                : convexConfig.config.isChecking
+                                    ? 'text-blue-400'
+                                    : convexConfig.config.isConnected
+                                        ? 'text-green-400'
+                                        : 'text-orange-400'
                                 }`}>
                                 {convexConfig.config.mode === 'disabled'
                                     ? 'Sync Disabled'
@@ -1035,6 +1037,27 @@ export default function WritePage() {
                             {viewMode === 'editor' ? <Network size={20} /> : <PenTool size={20} />}
                         </button>
 
+                        {/* Sync Status Indicator (Header) */}
+                        {convexConfig.config.mode !== 'disabled' && (
+                            <button
+                                className="icon-button"
+                                onClick={() => setShowSyncSettings(true)}
+                                title={`Sync: ${convexConfig.config.isConnected ? 'Connected' : 'Error'}`}
+                            >
+                                {convexConfig.config.isChecking ? (
+                                    <RefreshCw size={18} className="animate-spin text-blue-400" />
+                                ) : convexConfig.config.isConnected ? (
+                                    convexConfig.config.mode === 'local' ? (
+                                        <Wifi size={18} className="text-green-400" />
+                                    ) : (
+                                        <Cloud size={18} className="text-green-400" />
+                                    )
+                                ) : (
+                                    <CloudOff size={18} className="text-orange-400" />
+                                )}
+                            </button>
+                        )}
+
                         {/* Settings Dropdown */}
                         <div className="relative">
                             <button
@@ -1090,19 +1113,31 @@ export default function WritePage() {
                                         onClick={() => { setShowSyncSettings(true); setShowSettingsMenu(false); }}
                                         className="w-full px-4 py-2 text-left text-sm text-slate-300 hover:bg-slate-800 flex items-center gap-3"
                                     >
-                                        <Wifi size={16} />
-                                        Sync Settings
+                                        {convexConfig.config.isChecking ? (
+                                            <RefreshCw size={16} className="animate-spin text-blue-400" />
+                                        ) : convexConfig.config.mode === 'disabled' ? (
+                                            <CloudOff size={16} className="text-slate-500" />
+                                        ) : convexConfig.config.isConnected ? (
+                                            convexConfig.config.mode === 'local' ? (
+                                                <Wifi size={16} className="text-green-400" />
+                                            ) : (
+                                                <Cloud size={16} className="text-green-400" />
+                                            )
+                                        ) : (
+                                            <Wifi size={16} className="text-orange-400" />
+                                        )}
+                                        <div className="flex flex-col">
+                                            <span>Sync Settings</span>
+                                            {convexConfig.config.mode !== 'disabled' && (
+                                                <span className="text-[10px] text-slate-500 leading-none">
+                                                    {convexConfig.config.isChecking ? 'Connecting...' :
+                                                        convexConfig.config.isConnected ? 'Connected' : 'Error'}
+                                                </span>
+                                            )}
+                                        </div>
                                     </button>
                                 </div>
                             )}
-                        </div>
-
-                        {/* Sync status */}
-                        <div className="sync-status" title={`Status: ${syncStatus}`}>
-                            {syncStatus === 'synced' && <Cloud size={16} className="text-green-500" />}
-                            {syncStatus === 'syncing' && <Loader2 size={16} className="animate-spin text-blue-500" />}
-                            {syncStatus === 'local' && <CloudOff size={16} className="text-slate-500" />}
-                            {syncStatus === 'error' && <CloudOff size={16} className="text-red-500" />}
                         </div>
 
                         {/* Save status */}

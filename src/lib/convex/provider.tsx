@@ -95,14 +95,15 @@ export function ConvexConfigProvider({ children }: Props) {
             const controller = new AbortController();
             const timeoutId = setTimeout(() => controller.abort(), 3000);
 
-            const response = await fetch(`${url.replace(/\/$/, '')}/version`, {
+            await fetch(`${url.replace(/\/$/, '')}/version`, {
                 method: 'GET',
-                mode: 'cors',
+                mode: 'no-cors',
                 signal: controller.signal,
             });
             clearTimeout(timeoutId);
 
-            const connected = response.ok;
+            // If fetch resolves (even with opaque response), we have a connection
+            const connected = true;
             setConfig(prev => ({ ...prev, isConnected: connected, isChecking: false }));
             return connected;
         } catch {

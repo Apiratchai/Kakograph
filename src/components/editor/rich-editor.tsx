@@ -96,6 +96,7 @@ export function RichEditor({
     onNoteSelect,
 }: RichEditorProps) {
     const [isSaving, setIsSaving] = useState(false);
+    const isProgrammaticUpdate = useRef(false);
 
     // Track notes in ref to access inside suggestion (closure) without re-init editor
     const notesRef = useRef(notes);
@@ -165,6 +166,8 @@ export function RichEditor({
             // Removed handleKeyDown
         },
         onUpdate: ({ editor }) => {
+            // Skip if this update was triggered by setContent
+            if (isProgrammaticUpdate.current) return;
             onChange?.(editor.getHTML());
         },
     });
@@ -211,7 +214,11 @@ export function RichEditor({
     // Update content when prop changes
     useEffect(() => {
         if (editor && content !== editor.getHTML()) {
+            isProgrammaticUpdate.current = true;
             editor.commands.setContent(content);
+            // Reset flag after update is processed (next tick unsafe? no, synchronous)
+            // But to be safe, setTimeout? No, TipTap update is sync.
+            isProgrammaticUpdate.current = false;
         }
     }, [content, editor]);
 

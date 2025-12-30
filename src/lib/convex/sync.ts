@@ -5,14 +5,13 @@
  * Handles bidirectional sync between IndexedDB (local) and Convex (remote)
  */
 
-import { useMutation, useQuery } from 'convex/react';
 import { api } from '../../../convex/_generated/api';
 import { useConvexConfig } from './provider';
-import { useCallback, useEffect, useRef } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { EncryptedNote } from '../storage/interface';
 
 // How often to check for remote updates (ms)
-const SYNC_INTERVAL = 30000; // 30 seconds
+const SYNC_INTERVAL = 5000; // 5 seconds
 
 export interface SyncState {
     lastSyncTime: number;
@@ -32,22 +31,50 @@ export function useConvexSync(
     const { config, client } = useConvexConfig();
     const syncIntervalRef = useRef<NodeJS.Timeout | null>(null);
     const lastSyncRef = useRef<number>(0);
+    const [remoteNotes, setRemoteNotes] = useState<any[]>([]);
 
-    // Only use Convex hooks when connected
+    // Determine if sync is enabled
+    // Note: client might be null if mode is disabled
     const isEnabled = config.mode !== 'disabled' && config.isConnected && !!deviceId && !!client;
 
-    // Convex mutations (only call when enabled)
-    const upsertNote = useMutation(api.notes.upsertNote);
-    const bulkUpsert = useMutation(api.notes.bulkUpsertNotes);
-    const softDelete = useMutation(api.notes.softDeleteNote);
-    const hardDelete = useMutation(api.notes.hardDeleteNote);
-    const restoreNote = useMutation(api.notes.restoreNote);
+    /**
+     * Subscribe to remote notes manually (avoiding useQuery hook which throws without provider)
+     */
+    useEffect(() => {
+        if (!isEnabled || !client || !deviceId) {
+            console.log('[Sync] Sync inactive. Reason:', {
+                mode: config.mode,
+                isConnected: config.isConnected,
+                hasClient: !!client,
+                hasDeviceId: !!deviceId
+            });
+            setRemoteNotes([]);
+            return;
+        }
 
-    // Convex queries
-    const remoteNotes = useQuery(
-        api.notes.getAllNotes,
-        isEnabled ? { deviceId: deviceId! } : 'skip'
-    );
+        console.log('[Sync] Starting watch for device:', deviceId);
+        // Create a watcher for the query
+        const watch = client.watchQuery(api.notes.getAllNotes, { deviceId });
+
+        // Subscribe to updates
+        const unsubscribe = watch.onUpdate(() => {
+            const currentNotes = watch.localQueryResult();
+            console.log('[Sync] Received update. Notes count:', currentNotes?.length);
+            if (currentNotes !== undefined) {
+                setRemoteNotes(currentNotes);
+            }
+        });
+
+        // Initial fetch
+        const current = watch.localQueryResult();
+        if (current) setRemoteNotes(current);
+
+        return () => {
+            console.log('[Sync] Stopping watch');
+            unsubscribe();
+        };
+    }, [isEnabled, client, deviceId]);
+
 
     /**
      * Convert local EncryptedNote to Convex format
@@ -97,71 +124,71 @@ export function useConvexSync(
      * Push a single note to Convex
      */
     const pushNote = useCallback(async (note: EncryptedNote) => {
-        if (!isEnabled) return;
+        if (!isEnabled || !client) return;
 
         try {
-            await upsertNote(toConvexFormat(note));
+            await client.mutation(api.notes.upsertNote, toConvexFormat(note));
         } catch (error) {
             console.error('Failed to push note to Convex:', error);
             throw error;
         }
-    }, [isEnabled, upsertNote, toConvexFormat]);
+    }, [isEnabled, client, toConvexFormat]);
 
     /**
      * Push all unsynced notes to Convex
      */
     const pushAllUnsynced = useCallback(async (notes: EncryptedNote[]) => {
-        if (!isEnabled) return;
+        if (!isEnabled || !client) return;
 
         const unsynced = notes.filter(n => !n.synced);
         if (unsynced.length === 0) return;
 
         try {
-            await bulkUpsert({
+            await client.mutation(api.notes.bulkUpsertNotes, {
                 notes: unsynced.map(toConvexFormat),
             });
         } catch (error) {
             console.error('Failed to bulk push notes to Convex:', error);
             throw error;
         }
-    }, [isEnabled, bulkUpsert, toConvexFormat]);
+    }, [isEnabled, client, toConvexFormat]);
 
     /**
      * Soft delete a note on Convex
      */
     const pushDelete = useCallback(async (noteId: string, deletedAt: number) => {
-        if (!isEnabled || !deviceId) return;
+        if (!isEnabled || !deviceId || !client) return;
 
         try {
-            await softDelete({ noteId, deviceId, deletedAt });
+            await client.mutation(api.notes.softDeleteNote, { noteId, deviceId, deletedAt });
         } catch (error) {
             console.error('Failed to push delete to Convex:', error);
             throw error;
         }
-    }, [isEnabled, deviceId, softDelete]);
+    }, [isEnabled, deviceId, client]);
 
     /**
      * Hard delete a note on Convex
      */
     const pushHardDelete = useCallback(async (noteId: string) => {
-        if (!isEnabled || !deviceId) return;
+        if (!isEnabled || !deviceId || !client) return;
 
         try {
-            await hardDelete({ noteId, deviceId });
+            await client.mutation(api.notes.hardDeleteNote, { noteId, deviceId });
         } catch (error) {
             console.error('Failed to push hard delete to Convex:', error);
             throw error;
         }
-    }, [isEnabled, deviceId, hardDelete]);
+    }, [isEnabled, deviceId, client]);
 
     /**
      * Restore a note on Convex
      */
     const pushRestore = useCallback(async (noteId: string, folder?: string) => {
-        if (!isEnabled || !deviceId) return;
+        if (!isEnabled || !deviceId || !client) return;
 
         try {
-            await restoreNote({
+            await client.mutation(api.notes.restoreNote, {
                 noteId,
                 deviceId,
                 updatedAt: Date.now(),
@@ -171,28 +198,43 @@ export function useConvexSync(
             console.error('Failed to push restore to Convex:', error);
             throw error;
         }
-    }, [isEnabled, deviceId, restoreNote]);
+    }, [isEnabled, deviceId, client]);
 
     /**
      * Full sync: merge local and remote notes
      * Uses last-write-wins conflict resolution
      */
     const fullSync = useCallback(async () => {
-        if (!isEnabled || !remoteNotes) return;
+        if (!isEnabled || !client || !deviceId) return;
 
+        console.log('[Sync] Running full sync cycle');
+
+        // 1. Use localNotes from prop (already fresh from useNotes hook)
         const localMap = new Map(localNotes.map(n => [n.id, n]));
-        const remoteMap = new Map(remoteNotes.map(n => [n.noteId, n]));
+
+        // 2. Fetch latest from Cloud (Polling fallback)
+        // This ensures sync works even if WebSocket live updates fail
+        let fetchedRemotes: any[] = [];
+        try {
+            fetchedRemotes = await client.query(api.notes.getAllNotes, { deviceId });
+            // Update state for UI debugging
+            setRemoteNotes(fetchedRemotes);
+        } catch (err) {
+            console.error('[Sync] Failed to poll remote:', err);
+            return;
+        }
 
         const toUpdateLocal: EncryptedNote[] = [];
         const toUpdateRemote: EncryptedNote[] = [];
 
         // Check each remote note
-        for (const remote of remoteNotes) {
+        for (const remote of fetchedRemotes) {
             const local = localMap.get(remote.noteId);
             if (!local) {
                 // Remote note doesn't exist locally, add it
                 toUpdateLocal.push(fromConvexFormat(remote));
             } else if (remote.updatedAt > local.updatedAt) {
+                console.log(`[Sync] Update found for ${remote.noteId.slice(0, 6)}. Remote: ${remote.updatedAt}, Local: ${local.updatedAt}`);
                 // Remote is newer, update local
                 toUpdateLocal.push(fromConvexFormat(remote));
             } else if (local.updatedAt > remote.updatedAt) {
@@ -201,9 +243,12 @@ export function useConvexSync(
             }
         }
 
+        console.log(`[Sync] Decisions - LocalUp: ${toUpdateLocal.length}, RemoteUp: ${toUpdateRemote.length}`);
+
         // Check for local notes not in remote
+        const remoteIdSet = new Set(fetchedRemotes.map(n => n.noteId));
         for (const local of localNotes) {
-            if (!remoteMap.has(local.id)) {
+            if (!remoteIdSet.has(local.id)) {
                 toUpdateRemote.push(local);
             }
         }
@@ -247,6 +292,6 @@ export function useConvexSync(
         pushHardDelete,
         pushRestore,
         fullSync,
-        remoteNotes: remoteNotes ? remoteNotes.map(fromConvexFormat) : [],
+        remoteNotes: remoteNotes.map(fromConvexFormat),
     };
 }
