@@ -33,7 +33,8 @@ import {
     Heading2,
     Heading3,
     Code2,
-    Minus
+    Minus,
+    Image as ImageIcon
 } from 'lucide-react';
 import './rich-editor.css';
 
@@ -244,6 +245,18 @@ export function RichEditor({
         }
     }, [content, editor]);
 
+    const fileInputRef = useRef<HTMLInputElement>(null);
+
+    const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+        const file = e.target.files?.[0];
+        if (file && editor) {
+            compressImage(file).then(base64 => {
+                editor.chain().focus().setImage({ src: base64 }).run();
+            }).catch(console.error);
+        }
+        if (e.target) e.target.value = '';
+    };
+
     const setLink = useCallback(() => {
         if (!editor) return;
         const previousUrl = editor.getAttributes('link').href;
@@ -262,6 +275,13 @@ export function RichEditor({
 
     return (
         <div className={`rich-editor ${className}`}>
+            <input
+                type="file"
+                ref={fileInputRef}
+                onChange={handleImageUpload}
+                className="hidden"
+                accept="image/*"
+            />
             {/* Fixed toolbar */}
             {showToolbar && (
                 <div className="editor-toolbar">
@@ -371,6 +391,12 @@ export function RichEditor({
                             title="Add Link"
                         >
                             <LinkIcon size={16} />
+                        </button>
+                        <button
+                            onClick={() => fileInputRef.current?.click()}
+                            title="Upload Image"
+                        >
+                            <ImageIcon size={16} />
                         </button>
                         <button
                             onClick={() => editor.chain().focus().setHorizontalRule().run()}
