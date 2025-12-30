@@ -704,7 +704,18 @@ export default function WritePage() {
                     {/* Custom URL Input */}
                     {convexConfig.config.mode === 'custom' && (
                         <div className="space-y-2">
-                            <label className="block text-sm font-medium text-slate-300">Convex URL</label>
+                            <div className="flex justify-between items-center">
+                                <label className="block text-sm font-medium text-slate-300">Convex URL</label>
+                                <button
+                                    onClick={() => {
+                                        setSyncUrlInput('');
+                                        convexConfig.setCustomUrl('');
+                                    }}
+                                    className="text-xs text-blue-400 hover:text-blue-300"
+                                >
+                                    Reset
+                                </button>
+                            </div>
                             <input
                                 type="url"
                                 value={syncUrlInput}
