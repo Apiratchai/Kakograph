@@ -85,6 +85,12 @@ Add these to your Project Settings -> Environment Variables:
 docker run -d -p 3210:3210 convexinc/convex-backend
 ```
 
+## 🛡️ Data Persistence
+
+**Important:** Your notes are stored locally in your browser's **IndexedDB**.
+- Changing sync settings, updating the app, or clearing browser *cache* will **NOT** delete your notes.
+- **Warning:** Clearing "Site Data" or "Cookies & Site Data" in browser settings **WILL** delete your local notes if they haven't been synced to the cloud.
+
 ---
 
 ## �🛠️ Tech Stack
