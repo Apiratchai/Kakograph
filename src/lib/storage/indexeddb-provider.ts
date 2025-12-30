@@ -24,8 +24,9 @@ export class IndexedDBProvider implements StorageProvider {
         if (this.initialized) return;
 
         // Request persistent storage
-        const granted = await requestPersistentStorage();
-        console.log(`Persistent storage: ${granted ? 'granted' : 'not granted'}`);
+        requestPersistentStorage().then(granted => {
+            console.log(`[Storage] Persistent status: ${granted ? 'GRANTED' : 'DENIED/UNSUPPORTED'}`);
+        }).catch(err => console.error('[Storage] Persistent error:', err));
 
         // Open the database
         await getDB().open();

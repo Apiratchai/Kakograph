@@ -73,7 +73,11 @@ export function getDB(): KakographDB {
  * Request persistent storage to prevent browser eviction
  */
 export async function requestPersistentStorage(): Promise<boolean> {
-    if (navigator.storage && navigator.storage.persist) {
+    if (typeof navigator !== 'undefined' && navigator.storage && navigator.storage.persist) {
+        const isPersisted = await navigator.storage.persisted();
+        if (isPersisted) return true;
+
+        console.log('[Storage] Requesting persistence...');
         return await navigator.storage.persist();
     }
     return false;
