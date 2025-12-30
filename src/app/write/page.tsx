@@ -169,6 +169,13 @@ export default function WritePage() {
     const [syncUrlInput, setSyncUrlInput] = useState('');
     const convexConfig = useConvexConfig();
 
+    // Initialize input with current URL when modal opens
+    useEffect(() => {
+        if (showSyncSettings) {
+            setSyncUrlInput(convexConfig.config.customUrl || '');
+        }
+    }, [showSyncSettings, convexConfig.config.customUrl]);
+
     // Folder Logic
     const groupedNotes = useMemo(() => {
         const groups: Record<string, typeof notes> = { 'ROOT': [] };
@@ -700,7 +707,7 @@ export default function WritePage() {
                             <label className="block text-sm font-medium text-slate-300">Convex URL</label>
                             <input
                                 type="url"
-                                value={syncUrlInput || convexConfig.config.customUrl}
+                                value={syncUrlInput}
                                 onChange={(e) => setSyncUrlInput(e.target.value)}
                                 onBlur={() => {
                                     if (syncUrlInput) {
