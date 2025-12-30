@@ -20,10 +20,8 @@
   background: #1e293b;
   border-bottom: 1px solid #334155;
   flex-wrap: wrap;
-  position: fixed;
-  top: 56px; /* Below the main header */
-  left: 0;
-  right: 0;
+  /* Removed fixed positioning to rely on flex layout */
+  width: 100%;
   z-index: 30;
 }
 
@@ -68,7 +66,7 @@
 .rich-editor-content {
   flex: 1;
   padding: 1.5rem;
-  padding-top: 4rem; /* Account for fixed toolbar height */
+  /* Removed padding-top as toolbar is now in flow */
   font-size: 1rem;
   line-height: 1.75;
   color: #f1f5f9;
