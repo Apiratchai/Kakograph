@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from "next";
 import { Inter, JetBrains_Mono } from "next/font/google";
 import { AuthProvider } from "@/lib/auth/context";
+import { ConvexConfigProvider } from "@/lib/convex/provider";
 import "./globals.css";
 
 const inter = Inter({
@@ -43,10 +44,13 @@ export default function RootLayout({
         className={`${inter.variable} ${jetbrainsMono.variable} antialiased bg-slate-900 text-slate-100`}
         suppressHydrationWarning
       >
-        <AuthProvider>
-          {children}
-        </AuthProvider>
+        <ConvexConfigProvider>
+          <AuthProvider>
+            {children}
+          </AuthProvider>
+        </ConvexConfigProvider>
       </body>
     </html>
   );
 }
+

@@ -157,13 +157,56 @@ The app supports full snapshot export/import:
 - [x] Gradient logo matching landing page
 
 ### 🚧 Planned Features
-- [ ] Cloud sync via user-hosted backend (PocketBase/Supabase)
+- [ ] **Cloud sync via Convex** (user-hosted Convex project) — *Schema ready*
 - [ ] Real-time collaboration
 - [ ] Note versioning/history
 - [ ] Full-text search
 - [ ] Tags system
 - [ ] Dark/Light theme toggle
 - [ ] PWA install prompt
+
+---
+
+## ☁️ Convex Sync (Optional)
+
+Kakograph supports optional cloud sync via **Convex**. Convex is **fully self-hostable** with an open-source backend (Rust + TypeScript, FSL Apache 2.0 License).
+
+### Options for Users
+
+| Option | Description |
+|--------|-------------|
+| **Convex Cloud** | Create free account at [convex.dev](https://convex.dev) |
+| **Self-Hosted** | Run Convex backend on your own server |
+
+### Self-Hosting Guide
+
+Convex backend is open-source and can be self-hosted:
+- [Self-hosting documentation](https://docs.convex.dev/production/self-hosting)
+- [Convex GitHub](https://github.com/get-convex)
+- Join `#self-hosted` on [Convex Discord](https://discord.gg/convex)
+
+### Setup
+
+1. Create a Convex project (cloud or self-hosted)
+2. Deploy the schema:
+   ```bash
+   npx convex deploy
+   ```
+3. Configure your Kakograph instance with your Convex URL
+
+### Convex Schema
+
+The `/convex` folder contains:
+- `schema.ts` — Database schema matching local IndexedDB structure
+- `notes.ts` — API functions (queries, mutations)
+
+**Operations supported:**
+- `upsertNote` / `bulkUpsertNotes` — Create or update notes
+- `softDeleteNote` / `hardDeleteNote` — Trash and permanent delete
+- `restoreNote` / `moveNote` — Recovery and folder operations
+- `getActiveNotes` / `getAllNotes` / `getTrashNotes` — Querying
+- `clearAllNotes` — Full reset (for snapshot restore)
+- `cleanupOldTrash` — 30-day auto-cleanup
 
 ---
 

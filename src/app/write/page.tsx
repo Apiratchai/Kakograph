@@ -11,7 +11,8 @@ import { useRouter } from 'next/navigation';
 import { useAuth } from '@/lib/auth/context';
 import { RichEditor } from '@/components/editor/rich-editor';
 import { useNotes } from '@/lib/notes/hooks';
-import { Menu, Plus, Check, Cloud, CloudOff, Loader2, ChevronLeft, Lock, LockOpen, Download, Upload, Network, PenTool, Folder, FolderPlus, ChevronRight, ChevronDown, Trash2, Settings } from 'lucide-react';
+import { Menu, Plus, Check, Cloud, CloudOff, Loader2, ChevronLeft, Lock, LockOpen, Download, Upload, Network, PenTool, Folder, FolderPlus, ChevronRight, ChevronDown, Trash2, Settings, Wifi } from 'lucide-react';
+import { useConvexConfig, SyncMode } from '@/lib/convex/provider';
 import { PinKeypad } from '@/components/auth/pin-keypad';
 import { Modal } from '@/components/ui/modal';
 import './write.css';
@@ -162,6 +163,11 @@ export default function WritePage() {
 
     // Settings dropdown state
     const [showSettingsMenu, setShowSettingsMenu] = useState(false);
+
+    // Sync settings modal state
+    const [showSyncSettings, setShowSyncSettings] = useState(false);
+    const [syncUrlInput, setSyncUrlInput] = useState('');
+    const convexConfig = useConvexConfig();
 
     // Folder Logic
     const groupedNotes = useMemo(() => {
@@ -592,6 +598,152 @@ export default function WritePage() {
                 </div>
             )}
 
+            {/* Sync Settings Modal */}
+            <Modal
+                isOpen={showSyncSettings}
+                onClose={() => setShowSyncSettings(false)}
+                title="Sync Settings"
+                type="custom"
+                footer={
+                    <button
+                        onClick={() => setShowSyncSettings(false)}
+                        className="px-4 py-2 text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 rounded-lg"
+                    >
+                        Done
+                    </button>
+                }
+            >
+                <div className="space-y-4">
+                    <p className="text-sm text-slate-400">
+                        Choose how to sync your notes across devices. Data is always encrypted before leaving your device.
+                    </p>
+
+                    {/* Sync Mode Selection */}
+                    <div className="space-y-2">
+                        <label className="block text-sm font-medium text-slate-300">Sync Mode</label>
+                        <div className="space-y-2">
+                            {/* Disabled */}
+                            <button
+                                onClick={() => convexConfig.setMode('disabled')}
+                                className={`w-full p-3 rounded-lg border text-left transition-all ${convexConfig.config.mode === 'disabled'
+                                    ? 'border-blue-500 bg-blue-500/10'
+                                    : 'border-slate-700 hover:border-slate-600'
+                                    }`}
+                            >
+                                <div className="flex items-center gap-3">
+                                    <CloudOff size={18} className="text-slate-400" />
+                                    <div>
+                                        <div className="text-sm font-medium">Local Only</div>
+                                        <div className="text-xs text-slate-500">No sync, data stays on this device</div>
+                                    </div>
+                                </div>
+                            </button>
+
+                            {/* Local Convex */}
+                            <button
+                                onClick={() => convexConfig.setMode('local')}
+                                className={`w-full p-3 rounded-lg border text-left transition-all ${convexConfig.config.mode === 'local'
+                                    ? 'border-blue-500 bg-blue-500/10'
+                                    : 'border-slate-700 hover:border-slate-600'
+                                    }`}
+                            >
+                                <div className="flex items-center gap-3">
+                                    <Wifi size={18} className="text-green-400" />
+                                    <div>
+                                        <div className="text-sm font-medium">Local Convex</div>
+                                        <div className="text-xs text-slate-500">http://127.0.0.1:3210</div>
+                                    </div>
+                                </div>
+                            </button>
+
+                            {/* Cloud Convex */}
+                            <button
+                                onClick={() => convexConfig.setMode('cloud')}
+                                className={`w-full p-3 rounded-lg border text-left transition-all ${convexConfig.config.mode === 'cloud'
+                                    ? 'border-blue-500 bg-blue-500/10'
+                                    : 'border-slate-700 hover:border-slate-600'
+                                    }`}
+                            >
+                                <div className="flex items-center gap-3">
+                                    <Cloud size={18} className="text-blue-400" />
+                                    <div>
+                                        <div className="text-sm font-medium">Convex Cloud</div>
+                                        <div className="text-xs text-slate-500">Connect to your Convex project</div>
+                                    </div>
+                                </div>
+                            </button>
+
+                            {/* Custom URL */}
+                            <button
+                                onClick={() => convexConfig.setMode('custom')}
+                                className={`w-full p-3 rounded-lg border text-left transition-all ${convexConfig.config.mode === 'custom'
+                                    ? 'border-blue-500 bg-blue-500/10'
+                                    : 'border-slate-700 hover:border-slate-600'
+                                    }`}
+                            >
+                                <div className="flex items-center gap-3">
+                                    <Settings size={18} className="text-orange-400" />
+                                    <div>
+                                        <div className="text-sm font-medium">Custom URL</div>
+                                        <div className="text-xs text-slate-500">Self-hosted Convex instance</div>
+                                    </div>
+                                </div>
+                            </button>
+                        </div>
+                    </div>
+
+                    {/* Custom URL Input */}
+                    {convexConfig.config.mode === 'custom' && (
+                        <div className="space-y-2">
+                            <label className="block text-sm font-medium text-slate-300">Convex URL</label>
+                            <input
+                                type="url"
+                                value={syncUrlInput || convexConfig.config.customUrl}
+                                onChange={(e) => setSyncUrlInput(e.target.value)}
+                                onBlur={() => {
+                                    if (syncUrlInput) {
+                                        convexConfig.setCustomUrl(syncUrlInput);
+                                    }
+                                }}
+                                placeholder="https://your-convex.convex.cloud"
+                                className="w-full bg-slate-950 border border-slate-700 text-slate-200 rounded-lg p-2.5 text-sm focus:ring-2 focus:ring-blue-500 outline-none"
+                            />
+                        </div>
+                    )}
+
+                    {/* Connection Status */}
+                    <div className="flex items-center justify-between p-3 bg-slate-800/50 rounded-lg">
+                        <span className="text-sm text-slate-400">Status</span>
+                        <div className="flex items-center gap-2">
+                            <span className={`text-sm font-medium ${convexConfig.config.mode === 'disabled'
+                                    ? 'text-slate-500'
+                                    : convexConfig.config.isChecking
+                                        ? 'text-blue-400'
+                                        : convexConfig.config.isConnected
+                                            ? 'text-green-400'
+                                            : 'text-orange-400'
+                                }`}>
+                                {convexConfig.config.mode === 'disabled'
+                                    ? 'Sync Disabled'
+                                    : convexConfig.config.isChecking
+                                        ? 'Connecting...'
+                                        : convexConfig.config.isConnected
+                                            ? 'Connected'
+                                            : 'Not Connected'}
+                            </span>
+                            {convexConfig.config.mode !== 'disabled' && !convexConfig.config.isChecking && (
+                                <button
+                                    onClick={() => convexConfig.testConnection()}
+                                    className="text-xs text-blue-400 hover:text-blue-300"
+                                >
+                                    Retry
+                                </button>
+                            )}
+                        </div>
+                    </div>
+                </div>
+            </Modal>
+
             {/* Sidebar Overlay (Mobile) */}
             {isSidebarOpen && (
                 <div
@@ -931,6 +1083,15 @@ export default function WritePage() {
                                     >
                                         <Upload size={16} />
                                         Import Backup
+                                    </button>
+                                    <div className="border-t border-slate-800 my-1" />
+                                    {/* Sync Settings */}
+                                    <button
+                                        onClick={() => { setShowSyncSettings(true); setShowSettingsMenu(false); }}
+                                        className="w-full px-4 py-2 text-left text-sm text-slate-300 hover:bg-slate-800 flex items-center gap-3"
+                                    >
+                                        <Wifi size={16} />
+                                        Sync Settings
                                     </button>
                                 </div>
                             )}

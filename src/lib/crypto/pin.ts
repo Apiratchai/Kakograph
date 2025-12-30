@@ -60,10 +60,10 @@ export async function decryptSessionWithPin(encryptedData: string, pin: string):
         const payloadBytes = await crypto.subtle.decrypt(
             {
                 name: 'AES-GCM',
-                iv,
+                iv: iv.buffer,
             },
             wrappingKey,
-            ciphertext
+            ciphertext.buffer
         );
 
         const payloadString = new TextDecoder().decode(payloadBytes);
@@ -104,7 +104,7 @@ async function derivePinKey(pin: string, salt: Uint8Array): Promise<CryptoKey> {
     return await crypto.subtle.deriveKey(
         {
             name: 'PBKDF2',
-            salt: salt,
+            salt: salt.buffer as ArrayBuffer,
             iterations: PIN_ITERATIONS,
             hash: 'SHA-256',
         },
@@ -116,12 +116,13 @@ async function derivePinKey(pin: string, salt: Uint8Array): Promise<CryptoKey> {
 }
 
 // Params: hex string
-function hexToBytes(hex: string): Uint8Array {
+function hexToBytes(hex: string): Uint8Array<ArrayBuffer> {
     const arr = new Uint8Array(hex.length / 2);
     for (let i = 0; i < arr.length; i++) {
         arr[i] = parseInt(hex.substr(i * 2, 2), 16);
     }
-    return arr;
+    // Return a copy to ensure it has a proper ArrayBuffer (not ArrayBufferLike)
+    return new Uint8Array(arr) as Uint8Array<ArrayBuffer>;
 }
 
 // Params: Uint8Array
