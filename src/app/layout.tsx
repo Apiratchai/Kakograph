@@ -23,6 +23,9 @@ export const metadata: Metadata = {
     statusBarStyle: "black-translucent",
     title: "Kakograph",
   },
+  icons: {
+    apple: "/icons/icon-192.png",
+  },
 };
 
 export const viewport: Viewport = {
