@@ -88,5 +88,17 @@ This is the only secure way to handle conflicts without exposing plaintext to a 
 
 ---
 
-## Summary
-Kakograph prioritizes **Privacy** over **Real-Time Collaboration**. It is designed for a single user syncing across devices, not for Google Docs-style simultaneous editing.
+## 6. PWA & Offline Behavior (iOS Specific)
+
+### The "Safari Bridge"
+On iOS, PWAs are sandboxed within Safari's engine.
+- **Service Worker Lifecycle**: Safari checks for a new version of the app on every cold launch. This causes a momentary delay where it "goes to the internet first."
+- **First Load Requirement**: A Service Worker must be successfuly **installed and activated** before offline mode works. This typically requires opening the app once while connected and waiting ~5 seconds.
+- **HTTPS Only**: Service Workers (and therefore Offline Mode) **will not work** on local IP addresses (e.g., `http://192.168.1.x`). You must use the live HTTPS production URL.
+
+### Caching Strategy
+Kakograph uses **Stale-While-Revalidate**:
+1.  **Stage 1 (Instant)**: App loads the cached version immediately from your device.
+2.  **Stage 2 (Background)**: App checks the server for a newer version. If found, it updates in the background for the next time you open the app.
+3.  **Result**: The app feels instant, but might be "one version behind" for a few seconds if you just pushed an update.
+

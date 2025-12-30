@@ -168,6 +168,22 @@ export default function WritePage() {
     const [showSyncSettings, setShowSyncSettings] = useState(false);
     const [syncUrlInput, setSyncUrlInput] = useState('');
     const convexConfig = useConvexConfig();
+    const [isOnline, setIsOnline] = useState(true);
+
+    useEffect(() => {
+        // Safe check for SSR
+        if (typeof window !== 'undefined') {
+            setIsOnline(navigator.onLine);
+            const handleOnline = () => setIsOnline(true);
+            const handleOffline = () => setIsOnline(false);
+            window.addEventListener('online', handleOnline);
+            window.addEventListener('offline', handleOffline);
+            return () => {
+                window.removeEventListener('online', handleOnline);
+                window.removeEventListener('offline', handleOffline);
+            };
+        }
+    }, []);
 
     // Initialize input with current URL when modal opens
     useEffect(() => {
@@ -1060,9 +1076,11 @@ export default function WritePage() {
                             <button
                                 className="icon-button"
                                 onClick={() => setShowSyncSettings(true)}
-                                title={`Sync: ${convexConfig.config.isConnected ? 'Connected' : 'Error'}`}
+                                title={`Sync: ${!isOnline ? 'Offline (Check Connection)' : (convexConfig.config.isConnected ? 'Connected' : 'Error')}`}
                             >
-                                {convexConfig.config.isChecking ? (
+                                {!isOnline ? (
+                                    <CloudOff size={18} className="text-slate-500" />
+                                ) : convexConfig.config.isChecking ? (
                                     <RefreshCw size={18} className="animate-spin text-blue-400" />
                                 ) : convexConfig.config.isConnected ? (
                                     convexConfig.config.mode === 'local' ? (
