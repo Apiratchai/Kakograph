@@ -66,12 +66,19 @@ export function useNotes() {
         // Don't close storage on unmount - it's a singleton that persists
     }, [isAuthenticated, storage]);
 
-    // Extract title from content (first line or first N chars)
+    // Extract title from content (first line only)
     const extractTitle = useCallback((content: string): string => {
-        // Remove HTML tags and get first line
-        const text = content.replace(/<[^>]*>/g, '').trim();
-        const firstLine = text.split('\n')[0];
-        return firstLine.slice(0, 50) || 'Untitled';
+        // Replace block-level tags and breaks with newlines to ensure line separation
+        const withLineBreaks = content
+            .replace(/<\/(p|h[1-6]|div|li)>/gi, '\n')
+            .replace(/<br\s*\/?>/gi, '\n');
+
+        // Remove HTML tags and get first non-empty line
+        const text = withLineBreaks.replace(/<[^>]*>/g, '').trim();
+        const lines = text.split('\n').map(l => l.trim()).filter(l => l.length > 0);
+        const firstLine = lines[0] || 'Untitled';
+
+        return firstLine.slice(0, 70);
     }, []);
 
     // Load all notes

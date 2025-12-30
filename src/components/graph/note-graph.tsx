@@ -33,9 +33,18 @@ export default function NoteGraph({ notes, onNodeClick, onNodeHover, highlighted
 
     // Compute graph data
     const { graphData, neighborMap, nodeMap } = useMemo(() => {
+        const extractTitle = (content: string): string => {
+            const withLineBreaks = content
+                .replace(/<\/(p|h[1-6]|div|li)>/gi, '\n')
+                .replace(/<br\s*\/?>/gi, '\n');
+            const text = withLineBreaks.replace(/<[^>]*>/g, '').trim();
+            const lines = text.split('\n').map(l => l.trim()).filter(l => l.length > 0);
+            return lines[0]?.slice(0, 60) || 'Untitled';
+        };
+
         const nodes = notes.map(n => ({
             id: n.id,
-            name: n.title || 'Untitled',
+            name: extractTitle(n.content),
             val: 1, // Size base
             color: '#3b82f6', // Default blue
             group: 0,
