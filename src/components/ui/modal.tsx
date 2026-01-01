@@ -31,17 +31,27 @@ export function Modal({
     if (!isOpen) return null;
 
     return (
-        <div className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-in fade-in duration-200">
+        <div className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-in fade-in duration-200">
             <div
-                className="relative w-full max-w-md bg-slate-900 border border-slate-700 rounded-xl shadow-2xl overflow-hidden animate-in zoom-in-95 duration-200"
+                className="relative w-full max-w-md border rounded-xl shadow-2xl overflow-hidden animate-in zoom-in-95 duration-200"
+                style={{
+                    backgroundColor: 'var(--surface-elevated)',
+                    borderColor: 'var(--border-primary)'
+                }}
                 onClick={e => e.stopPropagation()}
             >
                 {/* Header */}
-                <div className="flex items-center justify-between p-4 border-b border-slate-800">
-                    <h3 className="text-lg font-semibold text-slate-100">{title}</h3>
+                <div
+                    className="flex items-center justify-between p-4"
+                    style={{ borderBottom: '1px solid var(--border-secondary)' }}
+                >
+                    <h3 className="text-lg font-semibold" style={{ color: 'var(--text-primary)' }}>{title}</h3>
                     <button
                         onClick={onClose}
-                        className="p-1 hover:bg-slate-800 rounded-lg text-slate-400 hover:text-slate-200 transition-colors"
+                        className="p-1 rounded-lg transition-colors"
+                        style={{ color: 'var(--text-muted)' }}
+                        onMouseEnter={e => e.currentTarget.style.backgroundColor = 'var(--hover-bg)'}
+                        onMouseLeave={e => e.currentTarget.style.backgroundColor = 'transparent'}
                     >
                         <X size={20} />
                     </button>
@@ -50,7 +60,7 @@ export function Modal({
                 {/* Body */}
                 <div className="p-4 space-y-4">
                     {description && (
-                        <p className="text-slate-300 text-sm leading-relaxed">
+                        <p className="text-sm leading-relaxed" style={{ color: 'var(--text-secondary)' }}>
                             {description}
                         </p>
                     )}
@@ -58,13 +68,31 @@ export function Modal({
                 </div>
 
                 {/* Footer (Auto-generated for alert/confirm, or custom) */}
-                <div className="p-4 bg-slate-950/50 border-t border-slate-800 flex justify-end gap-3">
+                <div
+                    className="p-4 flex justify-end gap-3"
+                    style={{
+                        backgroundColor: 'var(--surface-secondary)',
+                        borderTop: '1px solid var(--border-secondary)'
+                    }}
+                >
                     {footer ? footer : (
                         <>
                             {(type === 'confirm' || type === 'custom') && (
                                 <button
                                     onClick={onClose}
-                                    className="px-4 py-2 text-sm font-medium text-slate-300 hover:text-white bg-slate-800 hover:bg-slate-700 rounded-lg transition-colors"
+                                    className="px-4 py-2 text-sm font-medium rounded-lg transition-colors"
+                                    style={{
+                                        backgroundColor: 'var(--surface-tertiary)',
+                                        color: 'var(--text-secondary)'
+                                    }}
+                                    onMouseEnter={e => {
+                                        e.currentTarget.style.backgroundColor = 'var(--hover-bg)';
+                                        e.currentTarget.style.color = 'var(--text-primary)';
+                                    }}
+                                    onMouseLeave={e => {
+                                        e.currentTarget.style.backgroundColor = 'var(--surface-tertiary)';
+                                        e.currentTarget.style.color = 'var(--text-secondary)';
+                                    }}
                                 >
                                     {cancelText}
                                 </button>
@@ -90,3 +118,4 @@ export function Modal({
         </div>
     );
 }
+

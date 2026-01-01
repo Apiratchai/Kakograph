@@ -19,9 +19,27 @@ import Mention from '@tiptap/extension-mention';
 import { getSuggestionConfig } from './suggestion';
 import { compressImage } from '@/lib/image-utils';
 import { useCallback, useEffect, useState, useRef } from 'react';
+
+// New Extensions
+import { Underline } from '@tiptap/extension-underline';
+import { TextStyle } from '@tiptap/extension-text-style';
+import { Color } from '@tiptap/extension-color';
+import { Highlight } from '@tiptap/extension-highlight';
+import { Table } from '@tiptap/extension-table';
+import { TableRow } from '@tiptap/extension-table-row';
+import { TableHeader } from '@tiptap/extension-table-header';
+import { TableCell } from '@tiptap/extension-table-cell';
+import { Subscript } from '@tiptap/extension-subscript';
+import { Superscript } from '@tiptap/extension-superscript';
+import { TextAlign } from '@tiptap/extension-text-align';
+import { CharacterCount } from '@tiptap/extension-character-count';
+
+import { getCommandSuggestionConfig } from './command-suggestion';
+
 import {
     Bold,
     Italic,
+    Underline as UnderlineIcon,
     Strikethrough,
     Code,
     Link as LinkIcon,
@@ -34,7 +52,19 @@ import {
     Heading3,
     Code2,
     Minus,
-    Image as ImageIcon
+    Image as ImageIcon,
+    Table as TableIcon,
+    Palette,
+    Highlighter,
+    Type,
+    IndentDecrease,
+    IndentIncrease,
+    AlignLeft,
+    AlignCenter,
+    AlignRight,
+    Subscript as SubIcon,
+    Superscript as SuperIcon,
+    Eraser
 } from 'lucide-react';
 import './rich-editor.css';
 
@@ -109,57 +139,69 @@ export function RichEditor({
     const editor = useEditor({
         immediatelyRender: false,
         extensions: [
-            KeyMapOverride,
             StarterKit.configure({
-                codeBlock: false,
-                heading: {
-                    levels: [1, 2, 3, 4, 5, 6],
-                },
+                codeBlock: false, // Use lowlight instead
+                // history: true, // Invalid property in this version
             }),
             Placeholder.configure({
-                placeholder,
-                emptyEditorClass: 'is-editor-empty',
+                placeholder: placeholder,
+                emptyNodeClass: 'is-editor-empty',
             }),
-            CodeBlockLowlight.configure({
-                lowlight,
-                defaultLanguage: 'plaintext',
+            Underline,
+            TextStyle,
+            Color,
+            Highlight.configure({ multicolor: true }),
+            Table.configure({
+                resizable: true,
             }),
+            TableRow,
+            TableHeader,
+            TableCell,
+            Subscript,
+            Superscript,
+            TextAlign.configure({
+                types: ['heading', 'paragraph'],
+            }),
+            CharacterCount,
             Mention.configure({
                 HTMLAttributes: {
                     class: 'wiki-link',
                 },
                 suggestion: getSuggestionConfig(() => notesRef.current),
-                renderLabel({ options, node }) {
-                    return `${node.attrs.label ?? node.attrs.id}`;
-                },
             }),
-            TaskList.configure({
+            // Slash Command Mention
+            Mention.extend({
+                name: 'slashCommand',
+            }).configure({
                 HTMLAttributes: {
-                    class: 'task-list',
+                    class: 'slash-command',
                 },
+                suggestion: getCommandSuggestionConfig(),
             }),
-            // ... rest of extensions
+            CodeBlockLowlight.configure({
+                lowlight,
+            }),
+            TaskList,
             TaskItem.configure({
                 nested: true,
-                HTMLAttributes: {
-                    class: 'task-item',
-                },
             }),
             Link.configure({
-                openOnClick: true,
+                openOnClick: false,
                 autolink: true,
-                linkOnPaste: true,
                 HTMLAttributes: {
                     class: 'editor-link',
                 },
             }),
             Image.configure({
-                inline: true,
                 allowBase64: true,
+                HTMLAttributes: {
+                    class: 'editor-image',
+                },
             }),
             Typography,
+            KeyMapOverride,
         ],
-        content,
+        content: content,
         editable,
         editorProps: {
             attributes: {
@@ -269,12 +311,28 @@ export function RichEditor({
         editor.chain().focus().extendMarkRange('link').setLink({ href: url }).run();
     }, [editor]);
 
+    const indent = useCallback(() => {
+        if (!editor) return;
+        if (editor.isActive('bulletList') || editor.isActive('orderedList') || editor.isActive('taskList')) {
+            editor.chain().focus().sinkListItem('listItem').run();
+        } else {
+            editor.chain().focus().insertContent('    ').run();
+        }
+    }, [editor]);
+
+    const outdent = useCallback(() => {
+        if (!editor) return;
+        if (editor.isActive('bulletList') || editor.isActive('orderedList') || editor.isActive('taskList')) {
+            editor.chain().focus().liftListItem('listItem').run();
+        }
+    }, [editor]);
+
     if (!editor) {
         return null;
     }
 
     return (
-        <div className={`rich-editor ${className}`}>
+        <div className={`rich-editor ${className} ${!editable ? 'readonly' : ''}`}>
             <input
                 type="file"
                 ref={fileInputRef}
@@ -282,23 +340,30 @@ export function RichEditor({
                 className="hidden"
                 accept="image/*"
             />
-            {/* Fixed toolbar */}
-            {showToolbar && (
+
+            {showToolbar && editable && (
                 <div className="editor-toolbar">
                     <div className="toolbar-group">
                         <button
                             onClick={() => editor.chain().focus().toggleBold().run()}
                             className={editor.isActive('bold') ? 'is-active' : ''}
-                            title="Bold (Ctrl+B)"
+                            title="Bold"
                         >
                             <Bold size={16} />
                         </button>
                         <button
                             onClick={() => editor.chain().focus().toggleItalic().run()}
                             className={editor.isActive('italic') ? 'is-active' : ''}
-                            title="Italic (Ctrl+I)"
+                            title="Italic"
                         >
                             <Italic size={16} />
+                        </button>
+                        <button
+                            onClick={() => editor.chain().focus().toggleUnderline().run()}
+                            className={editor.isActive('underline') ? 'is-active' : ''}
+                            title="Underline"
+                        >
+                            <UnderlineIcon size={16} />
                         </button>
                         <button
                             onClick={() => editor.chain().focus().toggleStrike().run()}
@@ -308,11 +373,10 @@ export function RichEditor({
                             <Strikethrough size={16} />
                         </button>
                         <button
-                            onClick={() => editor.chain().focus().toggleCode().run()}
-                            className={editor.isActive('code') ? 'is-active' : ''}
-                            title="Inline Code"
+                            onClick={() => editor.chain().focus().unsetAllMarks().run()}
+                            title="Clear Formatting"
                         >
-                            <Code size={16} />
+                            <Eraser size={16} />
                         </button>
                     </div>
 
@@ -371,19 +435,69 @@ export function RichEditor({
                     <div className="toolbar-separator" />
 
                     <div className="toolbar-group">
+                        <button onClick={outdent} title="Outdent (Shift+Tab)">
+                            <IndentDecrease size={16} />
+                        </button>
+                        <button onClick={indent} title="Indent (Tab)">
+                            <IndentIncrease size={16} />
+                        </button>
+                    </div>
+
+                    <div className="toolbar-separator" />
+
+                    <div className="toolbar-group">
                         <button
-                            onClick={() => editor.chain().focus().toggleBlockquote().run()}
-                            className={editor.isActive('blockquote') ? 'is-active' : ''}
-                            title="Quote"
+                            onClick={() => editor.chain().focus().setTextAlign('left').run()}
+                            className={editor.isActive({ textAlign: 'left' }) ? 'is-active' : ''}
+                            title="Align Left"
                         >
-                            <Quote size={16} />
+                            <AlignLeft size={16} />
                         </button>
                         <button
-                            onClick={() => editor.chain().focus().toggleCodeBlock().run()}
-                            className={editor.isActive('codeBlock') ? 'is-active' : ''}
-                            title="Code Block"
+                            onClick={() => editor.chain().focus().setTextAlign('center').run()}
+                            className={editor.isActive({ textAlign: 'center' }) ? 'is-active' : ''}
+                            title="Align Center"
                         >
-                            <Code2 size={16} />
+                            <AlignCenter size={16} />
+                        </button>
+                        <button
+                            onClick={() => editor.chain().focus().setTextAlign('right').run()}
+                            className={editor.isActive({ textAlign: 'right' }) ? 'is-active' : ''}
+                            title="Align Right"
+                        >
+                            <AlignRight size={16} />
+                        </button>
+                    </div>
+
+                    <div className="toolbar-separator" />
+
+                    <div className="toolbar-group">
+                        <button
+                            onClick={() => {
+                                const color = window.prompt('Color (hex, name)', '#3b82f6');
+                                if (color) editor.chain().focus().setColor(color).run();
+                            }}
+                            title="Text Color"
+                        >
+                            <Palette size={16} />
+                        </button>
+                        <button
+                            onClick={() => editor.chain().focus().toggleHighlight().run()}
+                            className={editor.isActive('highlight') ? 'is-active' : ''}
+                            title="Highlight"
+                        >
+                            <Highlighter size={16} />
+                        </button>
+                    </div>
+
+                    <div className="toolbar-separator" />
+
+                    <div className="toolbar-group">
+                        <button
+                            onClick={() => editor.chain().focus().insertTable({ rows: 3, cols: 3, withHeaderRow: true }).run()}
+                            title="Insert Table"
+                        >
+                            <TableIcon size={16} />
                         </button>
                         <button
                             onClick={setLink}
@@ -399,6 +513,13 @@ export function RichEditor({
                             <ImageIcon size={16} />
                         </button>
                         <button
+                            onClick={() => editor.chain().focus().toggleCodeBlock().run()}
+                            className={editor.isActive('codeBlock') ? 'is-active' : ''}
+                            title="Code Block"
+                        >
+                            <Code2 size={16} />
+                        </button>
+                        <button
                             onClick={() => editor.chain().focus().setHorizontalRule().run()}
                             title="Horizontal Rule"
                         >
@@ -408,10 +529,15 @@ export function RichEditor({
                 </div>
             )}
 
-            {/* Main editor content */}
-            <EditorContent editor={editor} />
+            <div className="rich-editor-content-wrapper">
+                <EditorContent editor={editor} className="rich-editor-content" />
+                {editor.storage.characterCount && (
+                    <div className="editor-status-bar">
+                        {editor.storage.characterCount.characters()} characters
+                    </div>
+                )}
+            </div>
 
-            {/* Status indicator */}
             {isSaving && (
                 <div className="save-indicator">Saving...</div>
             )}

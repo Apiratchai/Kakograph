@@ -49,11 +49,18 @@ export function PinKeypad({ onSubmit, label = 'Enter PIN', loading = false, erro
 
     return (
         <div className="w-full max-w-xs mx-auto">
-            <h3 className="text-center text-lg font-medium text-slate-200 mb-6">{label}</h3>
+            <h3
+                className="text-center text-lg font-medium mb-6"
+                style={{ color: 'var(--text-primary)' }}
+            >
+                {label}
+            </h3>
 
             {/* Display */}
             <div className="flex justify-center mb-8 h-8 items-center gap-2">
-                {pin.length === 0 && <span className="text-slate-600 text-sm">Tap numbers</span>}
+                {pin.length === 0 && (
+                    <span className="text-sm" style={{ color: 'var(--text-muted)' }}>Tap numbers</span>
+                )}
                 {pin.split('').map((_, i) => (
                     <div key={i} className="w-3 h-3 rounded-full bg-blue-500 animate-in fade-in zoom-in duration-200" />
                 ))}
@@ -72,7 +79,13 @@ export function PinKeypad({ onSubmit, label = 'Enter PIN', loading = false, erro
                         key={num}
                         onClick={() => handleNum(num)}
                         disabled={loading}
-                        className="h-16 w-16 mx-auto rounded-full bg-slate-800 hover:bg-slate-700 active:bg-blue-600/20 active:scale-95 transition-all flex items-center justify-center text-2xl font-light text-slate-100 disabled:opacity-50"
+                        className="h-16 w-16 mx-auto rounded-full active:scale-95 transition-all flex items-center justify-center text-2xl font-light disabled:opacity-50"
+                        style={{
+                            backgroundColor: 'var(--surface-secondary)',
+                            color: 'var(--text-primary)'
+                        }}
+                        onMouseEnter={e => e.currentTarget.style.backgroundColor = 'var(--hover-bg)'}
+                        onMouseLeave={e => e.currentTarget.style.backgroundColor = 'var(--surface-secondary)'}
                     >
                         {num}
                     </button>
@@ -84,7 +97,13 @@ export function PinKeypad({ onSubmit, label = 'Enter PIN', loading = false, erro
                 <button
                     onClick={() => handleNum(0)}
                     disabled={loading}
-                    className="h-16 w-16 mx-auto rounded-full bg-slate-800 hover:bg-slate-700 active:bg-blue-600/20 active:scale-95 transition-all flex items-center justify-center text-2xl font-light text-slate-100 disabled:opacity-50"
+                    className="h-16 w-16 mx-auto rounded-full active:scale-95 transition-all flex items-center justify-center text-2xl font-light disabled:opacity-50"
+                    style={{
+                        backgroundColor: 'var(--surface-secondary)',
+                        color: 'var(--text-primary)'
+                    }}
+                    onMouseEnter={e => e.currentTarget.style.backgroundColor = 'var(--hover-bg)'}
+                    onMouseLeave={e => e.currentTarget.style.backgroundColor = 'var(--surface-secondary)'}
                 >
                     0
                 </button>
@@ -92,7 +111,16 @@ export function PinKeypad({ onSubmit, label = 'Enter PIN', loading = false, erro
                 <button
                     onClick={handleDelete}
                     disabled={loading || pin.length === 0}
-                    className="h-16 w-16 mx-auto rounded-full bg-transparent hover:bg-white/5 active:scale-95 transition-all flex items-center justify-center text-slate-400 hover:text-red-400 disabled:opacity-30"
+                    className="h-16 w-16 mx-auto rounded-full bg-transparent active:scale-95 transition-all flex items-center justify-center disabled:opacity-30"
+                    style={{ color: 'var(--text-muted)' }}
+                    onMouseEnter={e => {
+                        e.currentTarget.style.backgroundColor = 'rgba(255,255,255,0.05)';
+                        e.currentTarget.style.color = 'var(--accent-red)';
+                    }}
+                    onMouseLeave={e => {
+                        e.currentTarget.style.backgroundColor = 'transparent';
+                        e.currentTarget.style.color = 'var(--text-muted)';
+                    }}
                 >
                     <Delete size={24} />
                 </button>
@@ -115,3 +143,4 @@ export function PinKeypad({ onSubmit, label = 'Enter PIN', loading = false, erro
         </div>
     );
 }
+

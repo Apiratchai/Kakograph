@@ -70,14 +70,14 @@ export default function HomePage() {
 
   if (isLoading) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-slate-900">
+      <div className="min-h-screen flex items-center justify-center" style={{ backgroundColor: 'var(--surface-base)' }}>
         <Loader2 className="w-8 h-8 animate-spin text-blue-500" />
       </div>
     );
   }
 
   return (
-    <main className="min-h-screen flex flex-col bg-slate-950 text-slate-100">
+    <main className="min-h-screen flex flex-col" style={{ backgroundColor: 'var(--surface-base)', color: 'var(--text-primary)' }}>
       <Modal
         isOpen={modalConfig.isOpen}
         onClose={() => setModalConfig(prev => ({ ...prev, isOpen: false }))}
@@ -96,7 +96,7 @@ export default function HomePage() {
             Kakograph
           </h1>
         </div>
-        <p className="text-slate-400 text-sm">Write first, organize later</p>
+        <p style={{ color: 'var(--text-muted)' }} className="text-sm">Write first, organize later</p>
       </header>
 
       {/* Features - Hide on mobile if protected session exists to save space */}
@@ -105,15 +105,15 @@ export default function HomePage() {
           <div className="max-w-md mx-auto grid grid-cols-3 gap-4 text-center">
             <div className="p-3">
               <Shield className="w-6 h-6 mx-auto mb-2 text-green-500" />
-              <p className="text-xs text-slate-400">Zero-Knowledge</p>
+              <p className="text-xs" style={{ color: 'var(--text-muted)' }}>Zero-Knowledge</p>
             </div>
             <div className="p-3">
               <WifiOff className="w-6 h-6 mx-auto mb-2 text-purple-500" />
-              <p className="text-xs text-slate-400">Works Offline</p>
+              <p className="text-xs" style={{ color: 'var(--text-muted)' }}>Works Offline</p>
             </div>
             <div className="p-3">
               <Wifi className="w-6 h-6 mx-auto mb-2 text-blue-500" />
-              <p className="text-xs text-slate-400">Syncs Securely</p>
+              <p className="text-xs" style={{ color: 'var(--text-muted)' }}>Syncs Securely</p>
             </div>
           </div>
         </section>
@@ -124,7 +124,13 @@ export default function HomePage() {
         {hasProtectedSession ? (
           // Unlock View
           <div className="w-full max-w-sm">
-            <div className="bg-slate-900 border border-slate-800 rounded-2xl p-6 shadow-xl">
+            <div
+              className="rounded-2xl p-6 shadow-xl"
+              style={{
+                backgroundColor: 'var(--surface-elevated)',
+                border: '1px solid var(--border-primary)'
+              }}
+            >
               <PinKeypad
                 onSubmit={handleUnlockValidation}
                 loading={isUnlocking}
@@ -135,7 +141,10 @@ export default function HomePage() {
               <div className="mt-8 text-center">
                 <button
                   onClick={handleReset}
-                  className="text-xs text-slate-500 hover:text-slate-300 underline underline-offset-2 transition-colors"
+                  className="text-xs underline underline-offset-2 transition-colors"
+                  style={{ color: 'var(--text-muted)' }}
+                  onMouseEnter={e => e.currentTarget.style.color = 'var(--text-secondary)'}
+                  onMouseLeave={e => e.currentTarget.style.color = 'var(--text-muted)'}
                 >
                   Forgot PIN? Use Seed Phrase
                 </button>
@@ -151,7 +160,7 @@ export default function HomePage() {
       </section>
 
       {/* Footer */}
-      <footer className="p-4 text-center text-xs text-slate-500">
+      <footer className="p-4 text-center text-xs" style={{ color: 'var(--text-muted)' }}>
         <p>
           Your notes are encrypted with your seed phrase.
           <br />
@@ -161,3 +170,4 @@ export default function HomePage() {
     </main>
   );
 }
+

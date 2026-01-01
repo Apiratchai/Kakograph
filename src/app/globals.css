@@ -1,26 +1,291 @@
 @import "tailwindcss";
 
 :root {
-  /* Kakograph Color Palette */
-  --bg-primary: #0f172a;
-  --bg-secondary: #1e293b;
+  /* ========================================
+     DARK MODE (Default)
+     ======================================== */
+  
+  /* Core semantic colors */
+  --background: 222.2 84% 4.9%;
+  --foreground: 210 40% 98%;
+
+  --card: 222.2 84% 4.9%;
+  --card-foreground: 210 40% 98%;
+
+  --popover: 222.2 84% 4.9%;
+  --popover-foreground: 210 40% 98%;
+
+  --primary: 217.2 91.2% 59.8%;
+  --primary-foreground: 222.2 47.4% 11.2%;
+
+  --secondary: 217.2 32.6% 17.5%;
+  --secondary-foreground: 210 40% 98%;
+
+  --muted: 217.2 32.6% 17.5%;
+  --muted-foreground: 215 20.2% 65.1%;
+
+  --accent: 217.2 32.6% 17.5%;
+  --accent-foreground: 210 40% 98%;
+
+  --destructive: 0 62.8% 30.6%;
+  --destructive-foreground: 210 40% 98%;
+
+  --border: 217.2 32.6% 17.5%;
+  --input: 217.2 32.6% 17.5%;
+  --ring: 212.7 26.8% 83.9%;
+
+  /* ----------------------------------------
+     Surface System (Dark)
+     ---------------------------------------- */
+  --surface-base: #0a0f1a;
+  --surface-primary: #0f172a;
+  --surface-secondary: #1e293b;
+  --surface-tertiary: #334155;
+  --surface-elevated: #1e293b;
+  --surface-overlay: rgba(0, 0, 0, 0.6);
+  
+  /* ----------------------------------------
+     Text System (Dark)
+     ---------------------------------------- */
   --text-primary: #f1f5f9;
   --text-secondary: #94a3b8;
-  --accent: #3b82f6;
-  --accent-hover: #2563eb;
-  --danger: #ef4444;
-  --success: #22c55e;
-  --warning: #fbbf24;
+  --text-muted: #64748b;
+  --text-disabled: #475569;
+  --text-inverse: #0f172a;
+  
+  /* ----------------------------------------
+     Border System (Dark)
+     ---------------------------------------- */
+  --border-primary: #334155;
+  --border-secondary: #1e293b;
+  --border-focus: #3b82f6;
+  
+  /* ----------------------------------------
+     Interactive States (Dark)
+     ---------------------------------------- */
+  --hover-bg: #334155;
+  --active-bg: #475569;
+  --selected-bg: rgba(59, 130, 246, 0.2);
+  
+  /* ----------------------------------------
+     Accent Colors (Consistent)
+     ---------------------------------------- */
+  --accent-blue: #3b82f6;
+  --accent-blue-hover: #2563eb;
+  --accent-blue-light: rgba(59, 130, 246, 0.2);
+  --accent-green: #4ade80;
+  --accent-yellow: #fbbf24;
+  --accent-red: #f87171;
+  --accent-pink: #f472b6;
+  --accent-purple: #c084fc;
+  --accent-cyan: #22d3ee;
+  
+  /* ----------------------------------------
+     Editor Specifics (Dark)
+     ---------------------------------------- */
+  --editor-bg: #0f172a;
+  --editor-toolbar-bg: #1e293b;
+  --editor-content-bg: #0f172a;
+  --editor-code-bg: #0f172a;
+  --editor-code-border: #334155;
+  --editor-inline-code-bg: #1e293b;
+  --editor-highlight-bg: rgba(253, 224, 71, 0.3);
+  --editor-selection-bg: rgba(59, 130, 246, 0.3);
+  --editor-blockquote-border: #3b82f6;
+  --editor-hr-color: #334155;
+  
+  /* Code Syntax (Dark) */
+  --syntax-comment: #64748b;
+  --syntax-keyword: #c084fc;
+  --syntax-string: #22d3ee;
+  --syntax-number: #f472b6;
+  --syntax-function: #60a5fa;
+  --syntax-title: #fbbf24;
+  --syntax-params: #f1f5f9;
+  --syntax-builtin: #4ade80;
+
+  /* ----------------------------------------
+     Sidebar (Dark)
+     ---------------------------------------- */
+  --sidebar-bg: #0f172a;
+  --sidebar-fg: #f1f5f9;
+  --sidebar-border: #1e293b;
+  --sidebar-accent: #1e293b;
+  --sidebar-accent-fg: #f1f5f9;
+  --sidebar-hover: #1e293b;
+  --sidebar-active: #334155;
+  
+  /* ----------------------------------------
+     Graph (Dark)
+     ---------------------------------------- */
+  --graph-bg: #0f172a;
+  --graph-text: #e2e8f0;
+  --graph-link: #475569;
+  --graph-link-highlight: #60a5fa;
+  --graph-link-dimmed: #1e293b;
+  --graph-button-bg: #1e293b;
+  --graph-button-text: #94a3b8;
+  --graph-button-hover: #f1f5f9;
+  --graph-button-active-bg: #3b82f6;
+  
+  --radius: 0.5rem;
   
   /* Font variables */
   --font-sans: var(--font-inter), system-ui, -apple-system, sans-serif;
   --font-mono: var(--font-jetbrains-mono), 'JetBrains Mono', 'Fira Code', monospace;
 }
 
+html.light {
+  /* ========================================
+     LIGHT MODE
+     ======================================== */
+  
+  /* Core semantic colors */
+  --background: 0 0% 98%;
+  --foreground: 222.2 84% 4.9%;
+
+  --card: 0 0% 100%;
+  --card-foreground: 222.2 84% 4.9%;
+
+  --popover: 0 0% 100%;
+  --popover-foreground: 222.2 84% 4.9%;
+
+  --primary: 217.2 91.2% 59.8%;
+  --primary-foreground: 0 0% 100%;
+
+  --secondary: 210 40% 96.1%;
+  --secondary-foreground: 222.2 47.4% 11.2%;
+
+  --muted: 210 40% 96.1%;
+  --muted-foreground: 215.4 16.3% 46.9%;
+
+  --accent: 210 40% 96.1%;
+  --accent-foreground: 222.2 47.4% 11.2%;
+
+  --destructive: 0 84.2% 60.2%;
+  --destructive-foreground: 0 0% 100%;
+
+  --border: 214.3 31.8% 91.4%;
+  --input: 214.3 31.8% 91.4%;
+  --ring: 222.2 84% 4.9%;
+
+  /* ----------------------------------------
+     Surface System (Light)
+     ---------------------------------------- */
+  --surface-base: #ffffff;
+  --surface-primary: #fafafa;
+  --surface-secondary: #f1f5f9;
+  --surface-tertiary: #e2e8f0;
+  --surface-elevated: #ffffff;
+  --surface-overlay: rgba(0, 0, 0, 0.4);
+  
+  /* ----------------------------------------
+     Text System (Light)
+     ---------------------------------------- */
+  --text-primary: #0f172a;
+  --text-secondary: #475569;
+  --text-muted: #64748b;
+  --text-disabled: #94a3b8;
+  --text-inverse: #f1f5f9;
+  
+  /* ----------------------------------------
+     Border System (Light)
+     ---------------------------------------- */
+  --border-primary: #e2e8f0;
+  --border-secondary: #f1f5f9;
+  --border-focus: #3b82f6;
+  
+  /* ----------------------------------------
+     Interactive States (Light)
+     ---------------------------------------- */
+  --hover-bg: #e2e8f0;
+  --active-bg: #cbd5e1;
+  --selected-bg: rgba(59, 130, 246, 0.15);
+  
+  /* ----------------------------------------
+     Editor Specifics (Light)
+     ---------------------------------------- */
+  --editor-bg: #ffffff;
+  --editor-toolbar-bg: #f1f5f9;
+  --editor-content-bg: #ffffff;
+  --editor-code-bg: #f8fafc;
+  --editor-code-border: #e2e8f0;
+  --editor-inline-code-bg: #f1f5f9;
+  --editor-highlight-bg: rgba(253, 224, 71, 0.5);
+  --editor-selection-bg: rgba(59, 130, 246, 0.2);
+  --editor-blockquote-border: #3b82f6;
+  --editor-hr-color: #e2e8f0;
+  
+  /* Code Syntax (Light) */
+  --syntax-comment: #94a3b8;
+  --syntax-keyword: #8b5cf6;
+  --syntax-string: #0891b2;
+  --syntax-number: #db2777;
+  --syntax-function: #2563eb;
+  --syntax-title: #d97706;
+  --syntax-params: #0f172a;
+  --syntax-builtin: #16a34a;
+
+  /* ----------------------------------------
+     Sidebar (Light)
+     ---------------------------------------- */
+  --sidebar-bg: #f8fafc;
+  --sidebar-fg: #0f172a;
+  --sidebar-border: #e2e8f0;
+  --sidebar-accent: #e2e8f0;
+  --sidebar-accent-fg: #0f172a;
+  --sidebar-hover: #e2e8f0;
+  --sidebar-active: #cbd5e1;
+  
+  /* ----------------------------------------
+     Graph (Light)
+     ---------------------------------------- */
+  --graph-bg: #f8fafc;
+  --graph-text: #1e293b;
+  --graph-link: #94a3b8;
+  --graph-link-highlight: #3b82f6;
+  --graph-link-dimmed: #e2e8f0;
+  --graph-button-bg: #e2e8f0;
+  --graph-button-text: #64748b;
+  --graph-button-hover: #0f172a;
+  --graph-button-active-bg: #3b82f6;
+}
+
 @theme inline {
-  --color-background: var(--bg-primary);
-  --color-foreground: var(--text-primary);
-  --color-accent: var(--accent);
+  --color-background: hsl(var(--background));
+  --color-foreground: hsl(var(--foreground));
+  
+  --color-card: hsl(var(--card));
+  --color-card-foreground: hsl(var(--card-foreground));
+  
+  --color-popover: hsl(var(--popover));
+  --color-popover-foreground: hsl(var(--popover-foreground));
+  
+  --color-primary: hsl(var(--primary));
+  --color-primary-foreground: hsl(var(--primary-foreground));
+  
+  --color-secondary: hsl(var(--secondary));
+  --color-secondary-foreground: hsl(var(--secondary-foreground));
+  
+  --color-muted: hsl(var(--muted));
+  --color-muted-foreground: hsl(var(--muted-foreground));
+  
+  --color-accent: hsl(var(--accent));
+  --color-accent-foreground: hsl(var(--accent-foreground));
+  
+  --color-destructive: hsl(var(--destructive));
+  --color-destructive-foreground: hsl(var(--destructive-foreground));
+  
+  --color-border: hsl(var(--border));
+  --color-input: hsl(var(--input));
+  --color-ring: hsl(var(--ring));
+
+  --color-sidebar: var(--sidebar-bg);
+  --color-sidebar-foreground: var(--sidebar-fg);
+  --color-sidebar-border: var(--sidebar-border);
+  --color-sidebar-accent: var(--sidebar-accent);
+  --color-sidebar-accent-foreground: var(--sidebar-accent-fg);
+
   --font-sans: var(--font-sans);
   --font-mono: var(--font-mono);
 }
@@ -31,8 +296,8 @@ html.dark {
 }
 
 body {
-  background: var(--bg-primary);
-  color: var(--text-primary);
+  background: hsl(var(--background));
+  color: hsl(var(--foreground));
   font-family: var(--font-sans);
   min-height: 100vh;
   min-height: 100dvh;
@@ -52,13 +317,13 @@ body {
 
 /* Selection */
 ::selection {
-  background: var(--accent);
-  color: white;
+  background: hsl(var(--primary));
+  color: hsl(var(--primary-foreground));
 }
 
 /* Focus visible */
 :focus-visible {
-  outline: 2px solid var(--accent);
+  outline: 2px solid hsl(var(--ring));
   outline-offset: 2px;
 }
 
@@ -69,16 +334,16 @@ body {
 }
 
 ::-webkit-scrollbar-track {
-  background: var(--bg-secondary);
+  background: transparent;
 }
 
 ::-webkit-scrollbar-thumb {
-  background: #475569;
+  background: hsl(var(--muted-foreground) / 0.5);
   border-radius: 4px;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: #64748b;
+  background: hsl(var(--muted-foreground));
 }
 
 /* Typography */
@@ -89,7 +354,7 @@ h1, h2, h3, h4, h5, h6 {
 
 /* Links */
 a {
-  color: var(--accent);
+  color: hsl(var(--primary));
   text-decoration: none;
 }
 

@@ -7,7 +7,7 @@
   flex-direction: row;
   min-height: 100vh;
   min-height: 100dvh;
-  background: var(--bg-primary);
+  background: var(--surface-primary);
   overflow: hidden;
 }
 
@@ -17,8 +17,8 @@
   align-items: center;
   justify-content: space-between;
   padding: 0.75rem 1rem;
-  border-bottom: 1px solid #1e293b;
-  background: var(--bg-primary);
+  border-bottom: 1px solid var(--border-secondary);
+  background: var(--surface-primary);
   position: sticky;
   top: 0;
   z-index: 100;
@@ -58,7 +58,7 @@
 }
 
 .icon-button:hover {
-  background: var(--bg-secondary);
+  background: var(--hover-bg);
   color: var(--text-primary);
 }
 
@@ -79,7 +79,7 @@
   display: flex;
   align-items: center;
   gap: 0.25rem;
-  color: #4ade80;
+  color: var(--accent-green);
 }
 
 /* Main editor area */
@@ -132,14 +132,14 @@
   left: 0;
   bottom: 0;
   width: 280px;
-  background: #0f172a; /* slate-900 */
-  border-right: 1px solid #1e293b;
+  background: var(--sidebar-bg);
+  border-right: 1px solid var(--sidebar-border);
   transform: translateX(-100%);
   transition: transform 0.3s ease;
   z-index: 160;
   display: flex;
   flex-direction: column;
-  box-shadow: 4px 0 15px rgba(0, 0, 0, 0.3);
+  box-shadow: 4px 0 15px var(--surface-overlay);
 }
 
 .sidebar.open {
@@ -152,14 +152,14 @@
   left: 0;
   right: 0;
   bottom: 0;
-  background: rgba(0, 0, 0, 0.5);
+  background: var(--surface-overlay);
   z-index: 150;
   backdrop-filter: blur(2px);
 }
 
 .sidebar-header {
   padding: 1rem;
-  border-bottom: 1px solid #1e293b;
+  border-bottom: 1px solid var(--sidebar-border);
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -173,7 +173,7 @@
 
 .sidebar-footer {
   padding: 12px;
-  border-top: 1px solid var(--border-color);
+  border-top: 1px solid var(--sidebar-border);
   display: flex;
   justify-content: space-around;
   background-color: var(--sidebar-bg);
@@ -185,7 +185,7 @@
 
 .sidebar-footer .icon-button:hover {
   color: var(--text-primary);
-  background-color: var(--bg-hover);
+  background-color: var(--sidebar-hover);
 }
 
 .note-list {
@@ -196,7 +196,7 @@
 
 .note-item {
   padding: 0.75rem 1rem;
-  border-bottom: 1px solid #1e293b;
+  border-bottom: 1px solid var(--sidebar-border);
   cursor: pointer;
   transition: background 0.2s;
   display: flex;
@@ -206,7 +206,7 @@
 }
 
 .note-item:hover, .note-item.active {
-  background: #1e293b;
+  background: var(--sidebar-hover);
 }
 
 .note-info {
@@ -232,10 +232,10 @@
 .delete-button {
   background: transparent;
   border: none;
-  color: #64748b;
+  color: var(--text-muted);
   cursor: pointer;
   padding: 0.4rem;
-  opacity: 0;
+  opacity: 0.6;
   transition: all 0.2s;
   border-radius: 4px;
   display: flex;
@@ -251,12 +251,12 @@
 
 @media (hover: none) {
   .delete-button {
-    opacity: 1;
+    opacity: 0.7;
   }
 }
 
 .delete-button:hover {
-  color: #ef4444;
+  color: var(--accent-red);
   background: rgba(239, 68, 68, 0.1);
 }
 

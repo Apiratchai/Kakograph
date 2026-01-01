@@ -3,6 +3,7 @@ import { Inter, JetBrains_Mono } from "next/font/google";
 import { AuthProvider } from "@/lib/auth/context";
 import { ConvexConfigProvider } from "@/lib/convex/provider";
 import "./globals.css";
+import { ThemeProvider } from "@/lib/theme/provider";
 
 const inter = Inter({
   variable: "--font-inter",
@@ -105,16 +106,17 @@ export default function RootLayout({
         />
       </head>
       <body
-        className={`${inter.variable} ${jetbrainsMono.variable} antialiased bg-slate-900 text-slate-100`}
+        className={`${inter.variable} ${jetbrainsMono.variable} antialiased bg-background text-foreground`}
         suppressHydrationWarning
       >
         <ConvexConfigProvider>
-          <AuthProvider>
-            {children}
-          </AuthProvider>
+          <ThemeProvider defaultTheme="dark" storageKey="kakograph-theme">
+            <AuthProvider>
+              {children}
+            </AuthProvider>
+          </ThemeProvider>
         </ConvexConfigProvider>
       </body>
     </html>
   );
 }
-

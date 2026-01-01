@@ -23,6 +23,7 @@ interface ConvexConfig {
     customUrl: string;
     isConnected: boolean;
     isChecking: boolean;
+    isOfflineMode: boolean;
 }
 
 interface ConvexContextValue {
@@ -32,6 +33,9 @@ interface ConvexContextValue {
     setCustomUrl: (url: string) => void;
     getActiveUrl: () => string | null;
     testConnection: () => Promise<boolean>;
+    toggleOfflineMode: () => void;
+    reportConnectionError: () => void;
+    reportConnectionSuccess: () => void;
 }
 
 const ConvexConfigContext = createContext<ConvexContextValue | null>(null);
@@ -54,7 +58,11 @@ export function ConvexConfigProvider({ children }: Props) {
         customUrl: '',
         isConnected: false,
         isChecking: false,
+        isOfflineMode: false,
     });
+
+    // Track consecutive failures for exponential backoff
+    const [failureCount, setFailureCount] = useState(0);
 
     // Ref to track the current client to avoid recreating on every render
     const clientRef = useRef<ConvexReactClient | null>(null);
@@ -77,12 +85,27 @@ export function ConvexConfigProvider({ children }: Props) {
     }, []);
 
     const getActiveUrl = useCallback((): string | null => {
+        if (config.isOfflineMode) return null;
+        // Strictly require isConnected to allow client creation.
+        // This ensures implementation of "Disconnect -> Destroy Client -> Stop Logs"
+        if (!config.isConnected) return null;
         return getUrlForMode(config.mode, config.customUrl);
-    }, [config.mode, config.customUrl, getUrlForMode]);
+    }, [config.mode, config.customUrl, config.isOfflineMode, config.isConnected, getUrlForMode]);
 
     // Test connection to Convex
     const testConnection = useCallback(async (): Promise<boolean> => {
-        const url = getActiveUrl();
+        if (config.isOfflineMode) {
+            setConfig(prev => ({ ...prev, isConnected: false, isChecking: false }));
+            return false;
+        }
+
+        // First check navigator.onLine if available
+        if (typeof navigator !== 'undefined' && !navigator.onLine) {
+            setConfig(prev => ({ ...prev, isConnected: false, isChecking: false }));
+            return false;
+        }
+
+        const url = getUrlForMode(config.mode, config.customUrl);
         if (!url) {
             setConfig(prev => ({ ...prev, isConnected: false, isChecking: false }));
             return false;
@@ -93,24 +116,49 @@ export function ConvexConfigProvider({ children }: Props) {
         try {
             // Convex exposes a /version endpoint for health checks
             const controller = new AbortController();
-            const timeoutId = setTimeout(() => controller.abort(), 3000);
+            const timeoutId = setTimeout(() => controller.abort(), 8000); // 8s timeout
 
             await fetch(`${url.replace(/\/$/, '')}/version`, {
                 method: 'GET',
                 mode: 'no-cors',
                 signal: controller.signal,
+                cache: 'no-store', // Prevent getting cached responses
             });
             clearTimeout(timeoutId);
 
-            // If fetch resolves (even with opaque response), we have a connection
             const connected = true;
+
             setConfig(prev => ({ ...prev, isConnected: connected, isChecking: false }));
             return connected;
-        } catch {
+        } catch (err) {
+            console.warn('[ConvexProvider] Connection test failed:', err);
             setConfig(prev => ({ ...prev, isConnected: false, isChecking: false }));
             return false;
         }
-    }, [getActiveUrl]);
+    }, [config.isOfflineMode, config.mode, config.customUrl, getUrlForMode]);
+
+    // Listen for online/offline events
+    useEffect(() => {
+        if (typeof window === 'undefined') return;
+
+        const handleStatusChange = () => {
+            if (config.isOfflineMode) return;
+
+            if (!navigator.onLine) {
+                setConfig(prev => ({ ...prev, isConnected: false }));
+            } else if (mounted && config.mode !== 'disabled') {
+                testConnection();
+            }
+        };
+
+        window.addEventListener('online', handleStatusChange);
+        window.addEventListener('offline', handleStatusChange);
+
+        return () => {
+            window.removeEventListener('online', handleStatusChange);
+            window.removeEventListener('offline', handleStatusChange);
+        };
+    }, [mounted, config.mode, config.isOfflineMode, testConnection]);
 
     // Load saved config from localStorage on mount
     useEffect(() => {
@@ -130,25 +178,58 @@ export function ConvexConfigProvider({ children }: Props) {
 
     // Auto-test connection when mode changes
     useEffect(() => {
-        if (mounted && config.mode !== 'disabled') {
+        if (mounted && config.mode !== 'disabled' && !config.isOfflineMode) {
             testConnection();
         }
-    }, [mounted, config.mode, config.customUrl, testConnection]);
+    }, [mounted, config.mode, config.customUrl, config.isOfflineMode, testConnection]);
 
     const setMode = useCallback((mode: SyncMode) => {
         localStorage.setItem(CONVEX_ENABLED_KEY, mode);
         setConfig(prev => ({ ...prev, mode, isConnected: false }));
+        setFailureCount(0); // Reset failures on mode switch
     }, []);
 
     const setCustomUrl = useCallback((url: string) => {
         localStorage.setItem(CONVEX_URL_KEY, url);
         setConfig(prev => ({ ...prev, customUrl: url, isConnected: false }));
+        setFailureCount(0);
     }, []);
+
+    const toggleOfflineMode = useCallback(() => {
+        setConfig(prev => ({ ...prev, isOfflineMode: !prev.isOfflineMode }));
+    }, []);
+
+    const reportConnectionSuccess = useCallback(() => {
+        setFailureCount(0);
+    }, []);
+
+    const reportConnectionError = useCallback(() => {
+        console.warn('[ConvexProvider] Connection error reported. Failure count:', failureCount + 1);
+
+        setFailureCount(prev => prev + 1);
+        setConfig(prev => {
+            if (prev.isConnected) {
+                return { ...prev, isConnected: false };
+            }
+            return prev;
+        });
+
+        // Exponential backoff: 5s, 10s, 20s... max 60s
+        const delay = Math.min(60000, 5000 * Math.pow(2, failureCount));
+
+        console.log(`[ConvexProvider] Scheduling reconnection attempt in ${delay}ms`);
+
+        if (mounted && config.mode !== 'disabled' && !config.isOfflineMode) {
+            setTimeout(() => {
+                testConnection();
+            }, delay);
+        }
+    }, [mounted, config.mode, config.isOfflineMode, failureCount, testConnection]);
 
     // Create/update Convex client when URL changes
     useEffect(() => {
         const url = getActiveUrl();
-        if (url && mounted) {
+        if (url && mounted && !config.isOfflineMode) {
             try {
                 // Basic validation: must start with http/https
                 if (!url.startsWith('http://') && !url.startsWith('https://')) {
@@ -166,11 +247,16 @@ export function ConvexConfigProvider({ children }: Props) {
                 clientRef.current = null;
                 // If it crashes, we disable sync mode automatically to unblock the user
                 setMode('disabled');
+                reportConnectionError();
             }
         } else {
+            // Destroy client to stop background retries/logs
+            if (clientRef.current) {
+                console.log('[ConvexProvider] Destroying Convex client');
+            }
             clientRef.current = null;
         }
-    }, [getActiveUrl, mounted, setMode]);
+    }, [getActiveUrl, mounted, setMode, config.isOfflineMode, reportConnectionError]);
 
     const contextValue = useMemo(() => ({
         config,
@@ -179,12 +265,15 @@ export function ConvexConfigProvider({ children }: Props) {
         setCustomUrl,
         getActiveUrl,
         testConnection,
-    }), [config, setMode, setCustomUrl, getActiveUrl, testConnection]);
+        toggleOfflineMode,
+        reportConnectionError,
+        reportConnectionSuccess,
+    }), [config, setMode, setCustomUrl, getActiveUrl, testConnection, toggleOfflineMode, reportConnectionError, reportConnectionSuccess]);
 
     const activeUrl = getActiveUrl();
 
     // If sync is disabled or no URL, just render children without Convex
-    if (!activeUrl || !clientRef.current) {
+    if (!activeUrl || !clientRef.current || config.isOfflineMode) {
         return (
             <ConvexConfigContext.Provider value={contextValue}>
                 {children}

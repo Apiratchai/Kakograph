@@ -11,8 +11,9 @@ import { useRouter } from 'next/navigation';
 import { useAuth } from '@/lib/auth/context';
 import { RichEditor } from '@/components/editor/rich-editor';
 import { useNotes } from '@/lib/notes/hooks';
-import { Menu, Plus, Check, Cloud, CloudOff, Loader2, ChevronLeft, Lock, LockOpen, Download, Upload, Network, PenTool, Folder, FolderPlus, ChevronRight, ChevronDown, Trash2, Settings, Wifi, RefreshCw } from 'lucide-react';
+import { RefreshCw, Wifi, Cloud, CloudOff, Lock, LockOpen, Settings, ChevronRight, Folder, Hash, List, Trash2, Check, Plus, Upload, Download, Search, X, Link as LinkIcon, AlertTriangle, ArrowRight, Loader2, Sparkles, Sun, Moon, Shield, Menu, ChevronLeft, Network, PenTool, FolderPlus, ChevronDown } from 'lucide-react';
 import { useConvexConfig, SyncMode } from '@/lib/convex/provider';
+import { useTheme } from '@/lib/theme/provider';
 import { PinKeypad } from '@/components/auth/pin-keypad';
 import { Modal } from '@/components/ui/modal';
 import './write.css';
@@ -78,6 +79,7 @@ const TableOfContents = ({ content }: { content: string }) => {
 export default function WritePage() {
     const router = useRouter();
     const { isAuthenticated, isLoading: authLoading, setupPin, hasProtectedSession, logout } = useAuth();
+    const { theme, setTheme } = useTheme();
     const [isSidebarOpen, setIsSidebarOpen] = useState(false);
     const [showPinDialog, setShowPinDialog] = useState(false);
     const [pinInput, setPinInput] = useState('');
@@ -166,6 +168,7 @@ export default function WritePage() {
 
     // Sync settings modal state
     const [showSyncSettings, setShowSyncSettings] = useState(false);
+    const [showToC, setShowToC] = useState(false);
     const [syncUrlInput, setSyncUrlInput] = useState('');
     const convexConfig = useConvexConfig();
     const [isOnline, setIsOnline] = useState(true);
@@ -517,6 +520,7 @@ export default function WritePage() {
     // Select note and close sidebar
     const handleSelectNote = (id: string) => {
         selectNote(id);
+        setHoveredNodeId(null);
         setIsSidebarOpen(false);
         setViewMode('editor');
     };
@@ -524,6 +528,7 @@ export default function WritePage() {
     // Handle Graph Node Click
     const handleGraphNodeClick = (id: string) => {
         selectNote(id);
+        setHoveredNodeId(null);
         setViewMode('editor');
     };
 
@@ -559,7 +564,7 @@ export default function WritePage() {
 
     if (authLoading) {
         return (
-            <div className="min-h-screen flex items-center justify-center bg-slate-900">
+            <div className="min-h-screen flex items-center justify-center bg-background">
                 <Loader2 className="w-8 h-8 animate-spin text-blue-500" />
             </div>
         );
@@ -639,61 +644,76 @@ export default function WritePage() {
                 }
             >
                 <div className="space-y-4">
-                    <p className="text-sm text-slate-400">
+                    <p className="text-sm" style={{ color: 'var(--text-secondary)' }}>
                         Choose how to sync your notes across devices. Data is always encrypted before leaving your device.
                     </p>
 
+                    {/* Offline Toggle */}
+                    <div
+                        className="flex items-center justify-between p-3 rounded-lg"
+                        style={{
+                            backgroundColor: 'var(--surface-secondary)',
+                            border: '1px solid var(--border-primary)'
+                        }}
+                    >
+                        <div>
+                            <div className="text-sm font-medium" style={{ color: 'var(--text-primary)' }}>Work Offline</div>
+                            <div className="text-xs" style={{ color: 'var(--text-muted)' }}>Stop all sync attempts</div>
+                        </div>
+                        <button
+                            onClick={convexConfig.toggleOfflineMode}
+                            className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${convexConfig.config.isOfflineMode ? 'bg-blue-600' : ''}`}
+                            style={{ backgroundColor: convexConfig.config.isOfflineMode ? undefined : 'var(--surface-tertiary)' }}
+                        >
+                            <span
+                                className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${convexConfig.config.isOfflineMode ? 'translate-x-6' : 'translate-x-1'
+                                    }`}
+                            />
+                        </button>
+                    </div>
+
                     {/* Sync Mode Selection */}
                     <div className="space-y-2">
-                        <label className="block text-sm font-medium text-slate-300">Sync Mode</label>
+                        <label className="block text-sm font-medium" style={{ color: 'var(--text-secondary)' }}>Sync Mode</label>
                         <div className="space-y-2">
                             {/* Disabled */}
                             <button
                                 onClick={() => convexConfig.setMode('disabled')}
-                                className={`w-full p-3 rounded-lg border text-left transition-all ${convexConfig.config.mode === 'disabled'
-                                    ? 'border-blue-500 bg-blue-500/10'
-                                    : 'border-slate-700 hover:border-slate-600'
-                                    }`}
+                                className="w-full p-3 rounded-lg text-left transition-all"
+                                style={{
+                                    backgroundColor: convexConfig.config.mode === 'disabled' ? 'rgba(59, 130, 246, 0.1)' : 'transparent',
+                                    border: convexConfig.config.mode === 'disabled'
+                                        ? '1px solid var(--accent-blue)'
+                                        : '1px solid var(--border-primary)'
+                                }}
                             >
                                 <div className="flex items-center gap-3">
-                                    <CloudOff size={18} className="text-slate-400" />
+                                    <CloudOff size={18} style={{ color: 'var(--text-muted)' }} />
                                     <div>
-                                        <div className="text-sm font-medium">Local Only</div>
-                                        <div className="text-xs text-slate-500">No sync, data stays on this device</div>
+                                        <div className="text-sm font-medium" style={{ color: 'var(--text-primary)' }}>Local Only</div>
+                                        <div className="text-xs" style={{ color: 'var(--text-muted)' }}>No sync, data stays on this device</div>
                                     </div>
                                 </div>
                             </button>
 
-                            {/* Local Convex */}
-                            <button
-                                onClick={() => convexConfig.setMode('local')}
-                                className={`w-full p-3 rounded-lg border text-left transition-all ${convexConfig.config.mode === 'local'
-                                    ? 'border-blue-500 bg-blue-500/10'
-                                    : 'border-slate-700 hover:border-slate-600'
-                                    }`}
-                            >
-                                <div className="flex items-center gap-3">
-                                    <Wifi size={18} className="text-green-400" />
-                                    <div>
-                                        <div className="text-sm font-medium">Local Convex</div>
-                                        <div className="text-xs text-slate-500">http://127.0.0.1:3210</div>
-                                    </div>
-                                </div>
-                            </button>
+
 
                             {/* Cloud Convex */}
                             <button
                                 onClick={() => convexConfig.setMode('cloud')}
-                                className={`w-full p-3 rounded-lg border text-left transition-all ${convexConfig.config.mode === 'cloud'
-                                    ? 'border-blue-500 bg-blue-500/10'
-                                    : 'border-slate-700 hover:border-slate-600'
-                                    }`}
+                                className="w-full p-3 rounded-lg text-left transition-all"
+                                style={{
+                                    backgroundColor: convexConfig.config.mode === 'cloud' ? 'rgba(59, 130, 246, 0.1)' : 'transparent',
+                                    border: convexConfig.config.mode === 'cloud'
+                                        ? '1px solid var(--accent-blue)'
+                                        : '1px solid var(--border-primary)'
+                                }}
                             >
                                 <div className="flex items-center gap-3">
                                     <Cloud size={18} className="text-blue-400" />
                                     <div>
-                                        <div className="text-sm font-medium">Convex Cloud</div>
-                                        <div className="text-xs text-slate-500">Connect to your Convex project</div>
+                                        <div className="text-sm font-medium" style={{ color: 'var(--text-primary)' }}>Convex Cloud</div>
+                                        <div className="text-xs" style={{ color: 'var(--text-muted)' }}>Use Public cloud provided by us</div>
                                     </div>
                                 </div>
                             </button>
@@ -701,16 +721,19 @@ export default function WritePage() {
                             {/* Custom URL */}
                             <button
                                 onClick={() => convexConfig.setMode('custom')}
-                                className={`w-full p-3 rounded-lg border text-left transition-all ${convexConfig.config.mode === 'custom'
-                                    ? 'border-blue-500 bg-blue-500/10'
-                                    : 'border-slate-700 hover:border-slate-600'
-                                    }`}
+                                className="w-full p-3 rounded-lg text-left transition-all"
+                                style={{
+                                    backgroundColor: convexConfig.config.mode === 'custom' ? 'rgba(59, 130, 246, 0.1)' : 'transparent',
+                                    border: convexConfig.config.mode === 'custom'
+                                        ? '1px solid var(--accent-blue)'
+                                        : '1px solid var(--border-primary)'
+                                }}
                             >
                                 <div className="flex items-center gap-3">
                                     <Settings size={18} className="text-orange-400" />
                                     <div>
-                                        <div className="text-sm font-medium">Custom URL</div>
-                                        <div className="text-xs text-slate-500">Self-hosted Convex instance</div>
+                                        <div className="text-sm font-medium" style={{ color: 'var(--text-primary)' }}>Custom URL</div>
+                                        <div className="text-xs" style={{ color: 'var(--text-muted)' }}>Self-hosted Convex instance</div>
                                     </div>
                                 </div>
                             </button>
@@ -721,7 +744,7 @@ export default function WritePage() {
                     {convexConfig.config.mode === 'custom' && (
                         <div className="space-y-2">
                             <div className="flex justify-between items-center">
-                                <label className="block text-sm font-medium text-slate-300">Convex URL</label>
+                                <label className="block text-sm font-medium" style={{ color: 'var(--text-secondary)' }}>Convex URL</label>
                                 <button
                                     onClick={() => {
                                         setSyncUrlInput('');
@@ -742,23 +765,35 @@ export default function WritePage() {
                                     }
                                 }}
                                 placeholder="https://your-convex.convex.cloud"
-                                className="w-full bg-slate-950 border border-slate-700 text-slate-200 rounded-lg p-2.5 text-sm focus:ring-2 focus:ring-blue-500 outline-none"
+                                className="w-full rounded-lg p-2.5 text-sm focus:ring-2 focus:ring-blue-500 outline-none"
+                                style={{
+                                    backgroundColor: 'var(--surface-primary)',
+                                    border: '1px solid var(--border-primary)',
+                                    color: 'var(--text-primary)'
+                                }}
                             />
                         </div>
                     )}
 
                     {/* Connection Status */}
-                    <div className="flex items-center justify-between p-3 bg-slate-800/50 rounded-lg">
-                        <span className="text-sm text-slate-400">Status</span>
+                    <div
+                        className="flex items-center justify-between p-3 rounded-lg"
+                        style={{ backgroundColor: 'var(--surface-secondary)' }}
+                    >
+                        <span className="text-sm" style={{ color: 'var(--text-muted)' }}>Status</span>
                         <div className="flex items-center gap-2">
                             <span className={`text-sm font-medium ${convexConfig.config.mode === 'disabled'
-                                ? 'text-slate-500'
+                                ? ''
                                 : convexConfig.config.isChecking
                                     ? 'text-blue-400'
                                     : convexConfig.config.isConnected
                                         ? 'text-green-400'
                                         : 'text-orange-400'
-                                }`}>
+                                }`}
+                                style={{
+                                    color: convexConfig.config.mode === 'disabled' ? 'var(--text-muted)' : undefined
+                                }}
+                            >
                                 {convexConfig.config.mode === 'disabled'
                                     ? 'Sync Disabled'
                                     : convexConfig.config.isChecking
@@ -836,7 +871,7 @@ export default function WritePage() {
                                             <span className="text-sm font-medium truncate select-none">{folder}</span>
                                         </div>
                                         <button
-                                            className="p-1 text-slate-600 hover:text-red-400 opacity-0 group-hover:opacity-100 transition-opacity"
+                                            className="p-1 text-slate-600 hover:text-red-400 opacity-60 group-hover:opacity-100 transition-opacity"
                                             onClick={(e) => {
                                                 e.stopPropagation();
                                                 deleteFolder(folder);
@@ -848,14 +883,14 @@ export default function WritePage() {
                                     </div>
 
                                     {expandedFolders.has(folder) && (
-                                        <ul className="pl-3 border-l border-slate-800 ml-4 space-y-0.5 mt-1 animate-in slide-in-from-top-2 duration-200">
+                                        <ul className="pl-3 border-l border-border ml-4 space-y-0.5 mt-1 animate-in slide-in-from-top-2 duration-200">
                                             {groupedNotes[folder].length === 0 ? (
-                                                <li className="px-4 py-2 text-xs text-slate-600 italic select-none">Empty folder</li>
+                                                <li className="px-4 py-2 text-xs text-muted-foreground italic select-none">Empty folder</li>
                                             ) : (
                                                 groupedNotes[folder].map(note => (
                                                     <li
                                                         key={note.id}
-                                                        className={`note-item draggable ${currentNote?.id === note.id ? 'active' : ''} ${hoveredNodeId === note.id ? 'bg-slate-800/80 border-l-2 border-blue-500' : ''}`}
+                                                        className={`note-item draggable ${currentNote?.id === note.id ? 'active' : ''} ${hoveredNodeId === note.id ? 'bg-surface/80 border-l-2 border-blue-500' : ''}`}
                                                         onClick={() => handleSelectNote(note.id)}
                                                         onMouseEnter={() => setHoveredNodeId(note.id)}
                                                         onMouseLeave={() => setHoveredNodeId(null)}
@@ -867,7 +902,7 @@ export default function WritePage() {
                                                             className="delete-button"
                                                             onClick={(e) => {
                                                                 e.stopPropagation();
-                                                                showConfirm('Delete Note', 'Confirm delete?', () => deleteNote(note.id), true);
+                                                                deleteNote(note.id);
                                                             }}
                                                         >
                                                             &times;
@@ -885,7 +920,7 @@ export default function WritePage() {
                                 {groupedNotes['ROOT'].map((note) => (
                                     <li
                                         key={note.id}
-                                        className={`note-item draggable ${currentNote?.id === note.id ? 'active' : ''} ${hoveredNodeId === note.id ? 'bg-slate-800/80 border-l-2 border-blue-500' : ''}`}
+                                        className={`note-item draggable ${currentNote?.id === note.id ? 'active' : ''} ${hoveredNodeId === note.id ? 'bg-surface/80 border-l-2 border-blue-500' : ''}`}
                                         onClick={() => handleSelectNote(note.id)}
                                         onMouseEnter={() => setHoveredNodeId(note.id)}
                                         onMouseLeave={() => setHoveredNodeId(null)}
@@ -902,12 +937,7 @@ export default function WritePage() {
                                             className="delete-button"
                                             onClick={(e) => {
                                                 e.stopPropagation();
-                                                showConfirm(
-                                                    'Delete Note',
-                                                    'Move this note to trash?',
-                                                    () => deleteNote(note.id),
-                                                    true
-                                                );
+                                                deleteNote(note.id);
                                             }}
                                             title="Move to Trash"
                                         >
@@ -924,7 +954,7 @@ export default function WritePage() {
                 </div>
 
                 {/* Sidebar Footer: Trash + Actions */}
-                <div className="border-t border-slate-800/50 bg-slate-900/50">
+                <div className="border-t border-border/50 bg-surface/50">
                     {/* Trash Section */}
                     <div className="px-1 border-b border-slate-800/30">
                         <div
@@ -949,7 +979,7 @@ export default function WritePage() {
                                         {/* Trashed Folders */}
                                         {Object.keys(trashGroups).filter(k => k !== 'ROOT').sort().map(folder => (
                                             <div key={folder} className="mb-2">
-                                                <div className="flex items-center justify-between px-2 py-1 text-slate-500 rounded bg-slate-800/20 mb-1">
+                                                <div className="flex items-center justify-between px-2 py-1 text-muted-foreground rounded bg-surface/20 mb-1">
                                                     <div className="flex items-center gap-2 overflow-hidden">
                                                         <Folder size={12} />
                                                         <span className="text-xs truncate">{folder}</span>
@@ -971,13 +1001,13 @@ export default function WritePage() {
                                                         </button>
                                                     </div>
                                                 </div>
-                                                <ul className="pl-4 space-y-0.5 border-l border-slate-800 ml-1">
+                                                <ul className="pl-4 space-y-0.5 border-l border-border ml-1">
                                                     {trashGroups[folder].map(note => (
                                                         <li key={note.id} className="note-item opacity-60 hover:opacity-100 group">
                                                             <div className="note-info overflow-hidden">
-                                                                <div className="note-title line-through text-slate-500 group-hover:text-slate-400 transition-colors text-xs">{note.title || 'Untitled'}</div>
+                                                                <div className="note-title line-through text-muted-foreground group-hover:text-foreground transition-colors text-xs">{note.title || 'Untitled'}</div>
                                                             </div>
-                                                            <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                                                            <div className="flex items-center gap-1 opacity-60 group-hover:opacity-100 transition-opacity">
                                                                 <button
                                                                     className="p-1 hover:text-green-400 text-slate-600"
                                                                     onClick={(e) => { e.stopPropagation(); restoreNoteAsRoot(note.id); }}
@@ -1009,7 +1039,7 @@ export default function WritePage() {
                                                     <div className="note-info overflow-hidden">
                                                         <div className="note-title line-through text-slate-500 group-hover:text-slate-400 transition-colors text-xs">{note.title || 'Untitled'}</div>
                                                     </div>
-                                                    <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                                                    <div className="flex items-center gap-1 opacity-60 group-hover:opacity-100 transition-opacity">
                                                         <button
                                                             className="p-1 hover:text-green-400 text-slate-600"
                                                             onClick={(e) => { e.stopPropagation(); restoreNote(note.id); }}
@@ -1094,6 +1124,8 @@ export default function WritePage() {
                             </button>
                         )}
 
+
+
                         {/* Settings Dropdown */}
                         <div className="relative">
                             <button
@@ -1105,14 +1137,37 @@ export default function WritePage() {
                             </button>
                             {showSettingsMenu && (
                                 <div
-                                    className="absolute right-0 top-full mt-1 w-48 bg-slate-900 border border-slate-700 rounded-lg shadow-xl z-[100] py-1 animate-in fade-in slide-in-from-top-2 duration-150"
+                                    className="absolute right-0 top-full mt-1 w-48 rounded-lg shadow-xl z-[100] py-1 animate-in fade-in slide-in-from-top-2 duration-150"
+                                    style={{
+                                        backgroundColor: 'var(--surface-elevated)',
+                                        border: '1px solid var(--border-primary)'
+                                    }}
                                     onMouseLeave={() => setShowSettingsMenu(false)}
                                 >
+                                    {/* Theme Toggle */}
+                                    <button
+                                        onClick={() => {
+                                            setTheme(theme === 'dark' ? 'light' : 'dark');
+                                            setShowSettingsMenu(false);
+                                        }}
+                                        className="w-full px-4 py-2 text-left text-sm flex items-center gap-3 transition-colors"
+                                        style={{ color: 'var(--text-primary)' }}
+                                        onMouseEnter={e => e.currentTarget.style.backgroundColor = 'var(--hover-bg)'}
+                                        onMouseLeave={e => e.currentTarget.style.backgroundColor = 'transparent'}
+                                    >
+                                        {theme === 'dark' ? <Sun size={16} /> : <Moon size={16} />}
+                                        {theme === 'dark' ? 'Light Mode' : 'Dark Mode'}
+                                    </button>
+
+                                    <div className="h-px my-1" style={{ backgroundColor: 'var(--border-secondary)' }} />
+
                                     {/* Lock/Unlock Session */}
                                     {hasProtectedSession ? (
                                         <button
                                             onClick={() => { handleLock(); setShowSettingsMenu(false); }}
-                                            className="w-full px-4 py-2 text-left text-sm text-orange-400 hover:bg-slate-800 flex items-center gap-3"
+                                            className="w-full px-4 py-2 text-left text-sm text-orange-400 flex items-center gap-3 transition-colors"
+                                            onMouseEnter={e => e.currentTarget.style.backgroundColor = 'var(--hover-bg)'}
+                                            onMouseLeave={e => e.currentTarget.style.backgroundColor = 'transparent'}
                                         >
                                             <Lock size={16} />
                                             Lock Session
@@ -1120,77 +1175,87 @@ export default function WritePage() {
                                     ) : (
                                         <button
                                             onClick={() => { setShowPinDialog(true); setShowSettingsMenu(false); }}
-                                            className="w-full px-4 py-2 text-left text-sm text-slate-300 hover:bg-slate-800 flex items-center gap-3"
+                                            className="w-full px-4 py-2 text-left text-sm text-blue-400 flex items-center gap-3 transition-colors"
+                                            onMouseEnter={e => e.currentTarget.style.backgroundColor = 'var(--hover-bg)'}
+                                            onMouseLeave={e => e.currentTarget.style.backgroundColor = 'transparent'}
                                         >
-                                            <LockOpen size={16} />
-                                            Set PIN
+                                            <Shield size={16} />
+                                            Encrypt Session
                                         </button>
                                     )}
-                                    <div className="border-t border-slate-800 my-1" />
+
                                     {/* Export */}
                                     <button
                                         onClick={() => { handleExport(); setShowSettingsMenu(false); }}
-                                        className="w-full px-4 py-2 text-left text-sm text-slate-300 hover:bg-slate-800 flex items-center gap-3"
+                                        className="w-full px-4 py-2 text-left text-sm flex items-center gap-3 transition-colors"
+                                        style={{ color: 'var(--text-primary)' }}
+                                        onMouseEnter={e => e.currentTarget.style.backgroundColor = 'var(--hover-bg)'}
+                                        onMouseLeave={e => e.currentTarget.style.backgroundColor = 'transparent'}
                                     >
                                         <Download size={16} />
                                         Export Backup
                                     </button>
-                                    {/* Import */}
-                                    <button
-                                        onClick={() => { handleImportTrigger(); setShowSettingsMenu(false); }}
-                                        className="w-full px-4 py-2 text-left text-sm text-slate-300 hover:bg-slate-800 flex items-center gap-3"
-                                    >
-                                        <Upload size={16} />
-                                        Import Backup
-                                    </button>
-                                    <div className="border-t border-slate-800 my-1" />
+
                                     {/* Sync Settings */}
                                     <button
                                         onClick={() => { setShowSyncSettings(true); setShowSettingsMenu(false); }}
-                                        className="w-full px-4 py-2 text-left text-sm text-slate-300 hover:bg-slate-800 flex items-center gap-3"
+                                        className="w-full px-4 py-2 text-left text-sm flex items-center gap-3 transition-colors"
+                                        style={{ color: 'var(--text-primary)' }}
+                                        onMouseEnter={e => e.currentTarget.style.backgroundColor = 'var(--hover-bg)'}
+                                        onMouseLeave={e => e.currentTarget.style.backgroundColor = 'transparent'}
                                     >
-                                        {convexConfig.config.isChecking ? (
-                                            <RefreshCw size={16} className="animate-spin text-blue-400" />
-                                        ) : convexConfig.config.mode === 'disabled' ? (
-                                            <CloudOff size={16} className="text-slate-500" />
-                                        ) : convexConfig.config.isConnected ? (
-                                            convexConfig.config.mode === 'local' ? (
-                                                <Wifi size={16} className="text-green-400" />
+                                        <div className="flex items-center gap-3">
+                                            {convexConfig.config.isChecking ? (
+                                                <RefreshCw size={16} className="animate-spin text-blue-400" />
+                                            ) : convexConfig.config.mode === 'disabled' || convexConfig.config.isOfflineMode ? (
+                                                <CloudOff size={16} style={{ color: 'var(--text-muted)' }} />
+                                            ) : convexConfig.config.isConnected ? (
+                                                convexConfig.config.mode === 'local' ? (
+                                                    <Wifi size={16} className="text-green-400" />
+                                                ) : (
+                                                    <Cloud size={16} className="text-green-400" />
+                                                )
                                             ) : (
-                                                <Cloud size={16} className="text-green-400" />
-                                            )
-                                        ) : (
-                                            <Wifi size={16} className="text-orange-400" />
-                                        )}
-                                        <div className="flex flex-col">
-                                            <span>Sync Settings</span>
-                                            {convexConfig.config.mode !== 'disabled' && (
-                                                <span className="text-[10px] text-slate-500 leading-none">
-                                                    {convexConfig.config.isChecking ? 'Connecting...' :
-                                                        convexConfig.config.isConnected ? 'Connected' : 'Error'}
-                                                </span>
+                                                <AlertTriangle size={16} className="text-orange-400" />
                                             )}
+                                            <span>Sync Settings</span>
                                         </div>
                                     </button>
                                 </div>
                             )}
                         </div>
 
+
                         {/* Save status */}
-                        {isSaving ? (
-                            <span className="save-status">Saving...</span>
-                        ) : lastSaved ? (
-                            <span className="save-status saved">
-                                <Check size={12} /> Saved
-                            </span>
-                        ) : null}
+                        {
+                            isSaving ? (
+                                <span className="save-status">Saving...</span>
+                            ) : lastSaved ? (
+                                <span className="save-status saved">
+                                    <Check size={12} /> Saved
+                                </span>
+                            ) : null
+                        }
 
                         {/* New note button */}
                         <button className="icon-button" onClick={handleNewNote} title="New Note">
                             <Plus size={20} />
                         </button>
-                    </div>
-                </header>
+                    </div >
+                </header >
+
+                {/* Table of Contents Overlay (Floating) */}
+                {
+                    showToC && currentNote && (
+                        <div className="absolute top-16 right-4 z-[90] w-64 max-h-[70vh] bg-surface/95 backdrop-blur-md border border-border/50 rounded-xl shadow-2xl p-4 overflow-y-auto animate-in fade-in slide-in-from-right-4 duration-200">
+                            <div className="flex items-center justify-between mb-4">
+                                <h3 className="text-xs font-bold uppercase tracking-widest text-muted-foreground">Outline</h3>
+                                <button onClick={() => setShowToC(false)} className="text-muted-foreground hover:text-foreground text-xl">&times;</button>
+                            </div>
+                            <TableOfContents content={content} />
+                        </div>
+                    )
+                }
 
                 {/* Main Content Area */}
                 {/* Main Content Area */}
@@ -1211,9 +1276,9 @@ export default function WritePage() {
 
                     {/* Column 2: Right Sidebar (Graph + ToC) */}
                     {viewMode === 'editor' && currentNote && (
-                        <aside className="w-80 border-l border-slate-800 hidden lg:flex flex-col bg-slate-900/30">
+                        <aside className="w-80 border-l border-border hidden lg:flex flex-col bg-surface/30">
                             {/* Top: Interactive Graph */}
-                            <div className="h-64 border-b border-slate-800 relative flex-shrink-0">
+                            <div className="h-64 border-b border-border relative flex-shrink-0">
                                 <div className="absolute top-2 left-4 z-10 pointer-events-none">
                                     <h3 className="font-semibold text-slate-400 text-xs uppercase tracking-wider">Interactive Graph</h3>
                                 </div>
@@ -1240,11 +1305,11 @@ export default function WritePage() {
                             onNodeClick={handleGraphNodeClick}
                             onNodeHover={setHoveredNodeId}
                             highlightedNodeId={hoveredNodeId}
-                            className="absolute inset-0 bg-slate-900 z-10"
+                            className="absolute inset-0 bg-background z-10"
                         />
                     )}
                 </main>
-            </div>
+            </div >
 
             <Modal
                 isOpen={modalConfig.isOpen}
@@ -1255,6 +1320,6 @@ export default function WritePage() {
                 onConfirm={modalConfig.onConfirm}
                 isDestructive={modalConfig.isDestructive}
             />
-        </div>
+        </div >
     );
 }
