@@ -358,14 +358,24 @@ export function useNotes() {
         }
     }, [storage, loadNotes]);
 
-    // Permanently Delete
+    // Permanently Delete (Local Only)
     const permanentlyDeleteNote = useCallback(async (id: string) => {
         try {
+            // Optimistic update
+            setState(prev => ({
+                ...prev,
+                trash: prev.trash.filter(n => n.id !== id),
+                trashCount: Math.max(0, prev.trashCount - 1),
+                currentNote: prev.currentNote?.id === id ? null : prev.currentNote
+            }));
+
             await storage.hardDeleteNote(id);
-            // Refresh state from DB
-            loadNotes(true);
+            // Refresh state from DB to ensure sync list is updated
+            await loadNotes(true);
         } catch (err) {
             console.error('Failed to permanently delete:', err);
+            // Reload if error to restore consistency
+            loadNotes(true);
         }
     }, [storage, loadNotes]);
 
@@ -566,8 +576,16 @@ export function useNotes() {
     }, [deleteNote, syncService]);
 
     const hardDeleteWithSync = useCallback(async (id: string) => {
+        // 1. Push to remote first to avoid re-syncing before we delete locally
+        // This is important because fullSync pulls back missing local notes
+        try {
+            await syncService.pushHardDelete(id);
+        } catch (error) {
+            console.warn('[Sync] Failed to push hard delete, following through with local delete:', error);
+        }
+
+        // 2. Perform local delete
         await permanentlyDeleteNote(id);
-        syncService.pushHardDelete(id);
     }, [permanentlyDeleteNote, syncService]);
 
     const restoreNoteWithSync = useCallback(async (id: string) => {

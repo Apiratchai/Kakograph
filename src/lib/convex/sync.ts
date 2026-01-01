@@ -171,16 +171,21 @@ export function useConvexSync(
         }
     }, [isEnabled, deviceId, client]);
 
+    // Track pending hard deletes to avoid pulling them back during sync
+    const pendingHardDeletes = useRef<Set<string>>(new Set());
+
     /**
      * Hard delete a note on Convex
      */
     const pushHardDelete = useCallback(async (noteId: string) => {
         if (!isEnabled || !deviceId || !client) return;
 
+        pendingHardDeletes.current.add(noteId);
         try {
             await client.mutation(api.notes.hardDeleteNote, { noteId, deviceId });
         } catch (error) {
             console.error('Failed to push hard delete to Convex:', error);
+            pendingHardDeletes.current.delete(noteId);
             throw error;
         }
     }, [isEnabled, deviceId, client]);
@@ -233,6 +238,12 @@ export function useConvexSync(
 
         // Check each remote note
         for (const remote of fetchedRemotes) {
+            // Skip notes that we are currently hard-deleting
+            if (pendingHardDeletes.current.has(remote.noteId)) {
+                console.log(`[Sync] Skipping remote note ${remote.noteId.slice(0, 6)} - pending hard delete`);
+                continue;
+            }
+
             const local = localMap.get(remote.noteId);
             if (!local) {
                 // Remote note doesn't exist locally, add it
@@ -247,10 +258,17 @@ export function useConvexSync(
             }
         }
 
+        // 3. Clear pending deletes that are no longer in remote
+        const remoteIdSet = new Set(fetchedRemotes.map(n => n.noteId));
+        for (const id of pendingHardDeletes.current) {
+            if (!remoteIdSet.has(id)) {
+                pendingHardDeletes.current.delete(id);
+            }
+        }
+
         console.log(`[Sync] Decisions - LocalUp: ${toUpdateLocal.length}, RemoteUp: ${toUpdateRemote.length}`);
 
         // Check for local notes not in remote
-        const remoteIdSet = new Set(fetchedRemotes.map(n => n.noteId));
         for (const local of localNotes) {
             if (!remoteIdSet.has(local.id)) {
                 toUpdateRemote.push(local);
