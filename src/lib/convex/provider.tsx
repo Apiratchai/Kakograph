@@ -135,19 +135,6 @@ export function ConvexConfigProvider({ children }: Props) {
         }
     }, [mounted, config.mode, config.customUrl, testConnection]);
 
-    // Create/update Convex client when URL changes
-    useEffect(() => {
-        const url = getActiveUrl();
-        if (url && mounted) {
-            // Only create new client if URL changed
-            if (!clientRef.current || clientRef.current.url !== url) {
-                clientRef.current = new ConvexReactClient(url);
-            }
-        } else {
-            clientRef.current = null;
-        }
-    }, [getActiveUrl, mounted]);
-
     const setMode = useCallback((mode: SyncMode) => {
         localStorage.setItem(CONVEX_ENABLED_KEY, mode);
         setConfig(prev => ({ ...prev, mode, isConnected: false }));
@@ -157,6 +144,33 @@ export function ConvexConfigProvider({ children }: Props) {
         localStorage.setItem(CONVEX_URL_KEY, url);
         setConfig(prev => ({ ...prev, customUrl: url, isConnected: false }));
     }, []);
+
+    // Create/update Convex client when URL changes
+    useEffect(() => {
+        const url = getActiveUrl();
+        if (url && mounted) {
+            try {
+                // Basic validation: must start with http/https
+                if (!url.startsWith('http://') && !url.startsWith('https://')) {
+                    throw new Error('Invalid Convex URL protocol');
+                }
+
+                // Only create new client if URL changed
+                if (!clientRef.current || clientRef.current.url !== url) {
+                    clientRef.current = new ConvexReactClient(url, {
+                        skipConvexDeploymentUrlCheck: true,
+                    });
+                }
+            } catch (err) {
+                console.error('Failed to initialize Convex client:', err);
+                clientRef.current = null;
+                // If it crashes, we disable sync mode automatically to unblock the user
+                setMode('disabled');
+            }
+        } else {
+            clientRef.current = null;
+        }
+    }, [getActiveUrl, mounted, setMode]);
 
     const contextValue = useMemo(() => ({
         config,
