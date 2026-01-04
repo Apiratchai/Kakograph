@@ -147,17 +147,21 @@ export function useConvexSync(
     const pushAllUnsynced = useCallback(async (notes: EncryptedNote[]) => {
         if (!isEnabled || !client) return;
 
-        // Trust the caller (fullSync) - if passed here, it needs pushing regardless of synced flag
-        if (notes.length === 0) return;
+        // Ensure we don't revive notes that are pending hard delete
+        // This is critical to prevent the "Zombie" race condition where a background sync revives a note we just clicked "Empty Trash" on.
+        const validNotes = notes.filter(n => !pendingHardDeletes.current.has(n.id));
 
-        console.log(`[Sync] Pushing batch of ${notes.length} notes to Cloud`);
+        // Trust the caller (fullSync) - if passed here, it needs pushing regardless of synced flag
+        if (validNotes.length === 0) return;
+
+        console.log(`[Sync] Pushing batch of ${validNotes.length} notes to Cloud`);
 
         try {
             await client.mutation(api.notes.bulkUpsertNotes, {
-                notes: notes.map(toConvexFormat),
+                notes: validNotes.map(toConvexFormat),
             });
             // Mark all as synced
-            await localMarkAsSynced(notes.map(n => n.id));
+            await localMarkAsSynced(validNotes.map(n => n.id));
         } catch (error) {
             console.error('Failed to bulk push notes to Convex:', error);
             reportConnectionError();
@@ -322,6 +326,8 @@ export function useConvexSync(
         // Check for local notes not in remote
         for (const local of localNotes) {
             if (!remoteIdSet.has(local.id)) {
+                // Safety Check: Don't push if we are deleting it
+                if (pendingHardDeletes.current.has(local.id)) continue;
                 toUpdateRemote.push(local);
             }
         }

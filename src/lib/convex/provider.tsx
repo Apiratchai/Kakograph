@@ -64,8 +64,8 @@ export function ConvexConfigProvider({ children }: Props) {
     // Track consecutive failures for exponential backoff
     const [failureCount, setFailureCount] = useState(0);
 
-    // Ref to track the current client to avoid recreating on every render
-    const clientRef = useRef<ConvexReactClient | null>(null);
+    // State to track the current client (triggers re-render on change)
+    const [client, setClient] = useState<ConvexReactClient | null>(null);
     const [mounted, setMounted] = useState(false);
 
     // Get URL for a specific mode
@@ -237,30 +237,32 @@ export function ConvexConfigProvider({ children }: Props) {
                 }
 
                 // Only create new client if URL changed
-                if (!clientRef.current || clientRef.current.url !== url) {
-                    clientRef.current = new ConvexReactClient(url, {
+                // Using state (client) ensures re-render when client is set
+                if (!client || client.url !== url) {
+                    console.log('[ConvexProvider] Creating new client for:', url);
+                    setClient(new ConvexReactClient(url, {
                         skipConvexDeploymentUrlCheck: true,
-                    });
+                    }));
                 }
             } catch (err) {
                 console.error('Failed to initialize Convex client:', err);
-                clientRef.current = null;
+                setClient(null);
                 // If it crashes, we disable sync mode automatically to unblock the user
                 setMode('disabled');
                 reportConnectionError();
             }
         } else {
             // Destroy client to stop background retries/logs
-            if (clientRef.current) {
+            if (client) {
                 console.log('[ConvexProvider] Destroying Convex client');
+                setClient(null);
             }
-            clientRef.current = null;
         }
-    }, [getActiveUrl, mounted, setMode, config.isOfflineMode, reportConnectionError]);
+    }, [getActiveUrl, mounted, setMode, config.isOfflineMode, reportConnectionError, client]);
 
     const contextValue = useMemo(() => ({
         config,
-        client: clientRef.current,
+        client: client,
         setMode,
         setCustomUrl,
         getActiveUrl,
@@ -268,12 +270,12 @@ export function ConvexConfigProvider({ children }: Props) {
         toggleOfflineMode,
         reportConnectionError,
         reportConnectionSuccess,
-    }), [config, setMode, setCustomUrl, getActiveUrl, testConnection, toggleOfflineMode, reportConnectionError, reportConnectionSuccess]);
+    }), [config, client, setMode, setCustomUrl, getActiveUrl, testConnection, toggleOfflineMode, reportConnectionError, reportConnectionSuccess]);
 
     const activeUrl = getActiveUrl();
 
     // If sync is disabled or no URL, just render children without Convex
-    if (!activeUrl || !clientRef.current || config.isOfflineMode) {
+    if (!activeUrl || !client || config.isOfflineMode) {
         return (
             <ConvexConfigContext.Provider value={contextValue}>
                 {children}
@@ -283,7 +285,7 @@ export function ConvexConfigProvider({ children }: Props) {
 
     return (
         <ConvexConfigContext.Provider value={contextValue}>
-            <ConvexProvider client={clientRef.current}>
+            <ConvexProvider client={client}>
                 {children}
             </ConvexProvider>
         </ConvexConfigContext.Provider>
