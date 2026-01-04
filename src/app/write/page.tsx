@@ -108,6 +108,7 @@ export default function WritePage() {
         deleteNotes,
         restoreNotes,
         permanentlyDeleteNote,
+        permanentlyDeleteNotes,
         trashCount,
         clearAllNotes, // For full snapshot restore
         wipeLocalData
@@ -274,9 +275,8 @@ export default function WritePage() {
         const notes = trashGroups[folderName];
         if (notes) {
             showConfirm('Permanently Delete Folder', `Permanently delete folder "${folderName}" and all its contents?`, async () => {
-                for (const note of notes) {
-                    await permanentlyDeleteNote(note.id);
-                }
+                const ids = notes.map(n => n.id);
+                await permanentlyDeleteNotes(ids);
             }, true);
         }
     };
@@ -445,8 +445,8 @@ export default function WritePage() {
         if (trashConfirmInput !== 'delete forever') return;
 
         // Disable UI/show loading could be good here but we'll keep it simple
-        const promises = trash.map(note => permanentlyDeleteNote(note.id));
-        await Promise.all(promises);
+        const ids = trash.map(n => n.id);
+        await permanentlyDeleteNotes(ids);
 
         setShowTrashConfirm(false);
         setTrashConfirmInput('');

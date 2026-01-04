@@ -458,6 +458,8 @@ export function useNotes() {
         }
     }, [storage, loadNotes]);
 
+
+
     // Move note to folder
     const moveNote = useCallback(async (id: string, folder: string) => {
         if (!encryptionKey) return;
@@ -653,13 +655,18 @@ export function useNotes() {
         }
     }, [storage, loadNotes]);
 
-    // Initialize Sync Service
+    // Initialize Sync Service (Moved UP to be available for functions)
     const syncService = useConvexSync(
         seedId,
         state.encryptedNotes,
         handleRemoteUpdate,
         markNoteAsSynced
     );
+
+    // Override saveNote to push to sync
+    // ... we already refactored saveNote below, but let's keep the flow.
+
+
 
     // Cloud-First Save
     const saveNoteWithSync = useCallback(async (content: string) => {
@@ -821,6 +828,38 @@ export function useNotes() {
         }
     }, [permanentlyDeleteNote, syncService, loadNotes]);
 
+    // Bulk Permanently Delete (Cloud-First)
+    const permanentlyDeleteNotes = useCallback(async (ids: string[]) => {
+        // Optimistic UI Update
+        setState(prev => ({
+            ...prev,
+            trash: prev.trash.filter(n => !ids.includes(n.id)),
+            trashCount: Math.max(0, prev.trashCount - ids.length),
+            currentNote: ids.includes(prev.currentNote?.id || '') ? null : prev.currentNote
+        }));
+
+        if (syncService.isEnabled) {
+            try {
+                // 1. Push Bulk Hard Delete (Registers pending deletes to prevent zombie re-download)
+                await syncService.pushBulkHardDelete(ids);
+                // 2. Perform local delete
+                // We do this AFTER push starts (or ideally parallel with optimistic UI) 
+                // but since we added to pending list in sync service, fullSync won't catch it. 
+                await Promise.all(ids.map(id => storage.hardDeleteNote(id)));
+            } catch (error) {
+                console.error('[Hooks] Cloud bulk hard-delete failed, aborting local delete:', error);
+                // Revert or reload
+                loadNotes(true);
+            }
+        } else {
+            // Offline: Just delete locally.
+            await Promise.all(ids.map(id => storage.hardDeleteNote(id)));
+        }
+
+        // Refresh to ensure consistency
+        loadNotes(true);
+    }, [storage, loadNotes, syncService]);
+
     const restoreNoteWithSync = useCallback(async (id: string) => {
         // Optimistic UI Update
         // (Complex to do optimistic restore derived from trash state, so skipping UI opt for now, rely on fast cloud)
@@ -858,6 +897,7 @@ export function useNotes() {
         restoreNote: restoreNoteWithSync,
         restoreNotes,
         permanentlyDeleteNote: hardDeleteWithSync,
+        permanentlyDeleteNotes, // New Bulk Function
         moveNote: moveNoteWithSync,
         updateNoteLocal,
         clearAllNotes, // For full snapshot restore

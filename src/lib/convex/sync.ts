@@ -201,6 +201,26 @@ export function useConvexSync(
     }, [isEnabled, seedId, client]);
 
     /**
+     * Bulk Hard Delete
+     */
+    const pushBulkHardDelete = useCallback(async (noteIds: string[]) => {
+        if (!isEnabled || !seedId || !client || noteIds.length === 0) return;
+
+        // Mark all as pending delete to prevent re-sync
+        noteIds.forEach(id => pendingHardDeletes.current.add(id));
+
+        try {
+            await client.mutation(api.notes.bulkHardDeleteNotes, { noteIds, seedId });
+        } catch (error) {
+            console.error('Failed to push bulk hard delete:', error);
+            // On failure, remove from pending so they might get synced back or retried
+            noteIds.forEach(id => pendingHardDeletes.current.delete(id));
+            reportConnectionError();
+            throw error;
+        }
+    }, [isEnabled, seedId, client]);
+
+    /**
      * Restore a note on Convex
      */
     const pushRestore = useCallback(async (noteId: string) => {
@@ -347,6 +367,7 @@ export function useConvexSync(
         pushAllUnsynced,
         pushDelete,
         pushHardDelete,
+        pushBulkHardDelete,
         pushRestore,
         fullSync,
         remoteNotes: remoteNotes.map(fromConvexFormat),

@@ -111,6 +111,30 @@ export const hardDeleteNote = mutation({
 });
 
 /**
+ * Bulk permanently delete notes (hard delete)
+ */
+export const bulkHardDeleteNotes = mutation({
+    args: {
+        noteIds: v.array(v.string()),
+        seedId: v.string(),
+    },
+    handler: async (ctx, args) => {
+        for (const noteId of args.noteIds) {
+            const note = await ctx.db
+                .query('notes')
+                .withIndex('by_seed_noteId', (q) =>
+                    q.eq('seedId', args.seedId).eq('noteId', noteId)
+                )
+                .first();
+
+            if (note) {
+                await ctx.db.delete(note._id);
+            }
+        }
+    },
+});
+
+/**
  * Restore a note from trash
  */
 export const restoreNote = mutation({
