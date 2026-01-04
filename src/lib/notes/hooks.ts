@@ -623,21 +623,32 @@ export function useNotes() {
         if (!encryptionKey) return;
 
         try {
-            console.log('[Hooks] Applying remote updates to DB:', incomingNotes.length);
             await storage.bulkSave(incomingNotes);
-            console.log('[Hooks] DB Unlocked. Reloading notes...');
             await loadNotes(true);
-            console.log('[Hooks] Notes reloaded.');
         } catch (err) {
             console.error('Failed to apply remote updates:', err);
         }
     }, [storage, encryptionKey, loadNotes]);
 
+    // Callback to mark notes as synced after successful push
+    const markNoteAsSynced = useCallback(async (ids: string[]) => {
+        try {
+            for (const id of ids) {
+                await storage.markAsSynced(id);
+            }
+            // Silent reload to update 'synced' status in memory
+            loadNotes(true);
+        } catch (err) {
+            console.error('Failed to mark notes as synced:', err);
+        }
+    }, [storage, loadNotes]);
+
     // Initialize Sync Service
     const syncService = useConvexSync(
         seedId,
         state.encryptedNotes,
-        handleRemoteUpdate
+        handleRemoteUpdate,
+        markNoteAsSynced
     );
 
     // Override saveNote to push to sync

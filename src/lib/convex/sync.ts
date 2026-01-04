@@ -27,7 +27,8 @@ export interface SyncState {
 export function useConvexSync(
     seedId: string | null,
     localNotes: EncryptedNote[],
-    onRemoteUpdate: (notes: EncryptedNote[]) => void
+    onRemoteUpdate: (notes: EncryptedNote[]) => void,
+    localMarkAsSynced: (ids: string[]) => Promise<void>
 ) {
     const { config, client, reportConnectionError, reportConnectionSuccess } = useConvexConfig();
     const syncIntervalRef = useRef<NodeJS.Timeout | null>(null);
@@ -36,7 +37,8 @@ export function useConvexSync(
 
     // Determine if sync is enabled
     // Note: client might be null if mode is disabled
-    const isEnabled = config.mode !== 'disabled' && config.isConnected && !!seedId && !!client && !config.isChecking;
+    // We do NOT pause sync during 'isChecking' (HTTP ping), as that tears down the interface.
+    const isEnabled = config.mode !== 'disabled' && config.isConnected && !!seedId && !!client;
 
     /**
      * Subscribe to remote notes manually (avoiding useQuery hook which throws without provider)
@@ -60,7 +62,6 @@ export function useConvexSync(
         // Subscribe to updates
         const unsubscribe = watch.onUpdate(() => {
             const currentNotes = watch.localQueryResult();
-            console.log('[Sync] Received update. Notes count:', currentNotes?.length);
             if (currentNotes !== undefined) {
                 setRemoteNotes(currentNotes);
             }
@@ -131,12 +132,14 @@ export function useConvexSync(
 
         try {
             await client.mutation(api.notes.upsertNote, toConvexFormat(note));
+            // Mark as synced locally so we don't conflict with our own echo
+            await localMarkAsSynced([note.id]);
         } catch (error) {
             console.error('Failed to push note to Convex:', error);
             reportConnectionError();
             throw error;
         }
-    }, [isEnabled, client, toConvexFormat]);
+    }, [isEnabled, client, toConvexFormat, localMarkAsSynced]);
 
     /**
      * Push all unsynced notes to Convex
@@ -153,12 +156,14 @@ export function useConvexSync(
             await client.mutation(api.notes.bulkUpsertNotes, {
                 notes: notes.map(toConvexFormat),
             });
+            // Mark all as synced
+            await localMarkAsSynced(notes.map(n => n.id));
         } catch (error) {
             console.error('Failed to bulk push notes to Convex:', error);
             reportConnectionError();
             throw error;
         }
-    }, [isEnabled, client, toConvexFormat]);
+    }, [isEnabled, client, toConvexFormat, localMarkAsSynced]);
 
     /**
      * Soft delete a note on Convex
@@ -254,39 +259,33 @@ export function useConvexSync(
                 // Remote note doesn't exist locally, add it
                 toUpdateLocal.push(fromConvexFormat(remote));
             } else if (remote.updatedAt > local.updatedAt) {
-                // Remote is newer.
-                // CHECK FOR CONFLICT:
-                // 1. If we have unsynced changes (synced = false)
-                // 2. AND we didn't start from this remote version (baseHash mismatch)
-                // Then it's a conflict.
+                // ... (existing conflict check logic) ...
                 const isConflict = !local.synced && local.baseHash !== remote.metadata.contentHash;
 
                 if (isConflict) {
+                    // ... (existing conflict handling) ...
                     console.warn('[Sync] CONFLICT DETECTED for', local.id);
-
-                    // STRATEGY: Merge UI
-                    // Do not overwrite local. Do not create duplicate.
-                    // Instead, inject the Remote Content into `conflictData` of the local note.
-
                     const conflictUpdate: EncryptedNote = {
                         ...local,
-                        // Persist the remote content so UI can show it
                         conflictData: JSON.parse(remote.encryptedContent),
-                        // Keep local as is, but ensure it remains unsynced so we don't lose local changes
                         synced: false,
                     };
-
                     toUpdateLocal.push(conflictUpdate);
-                    console.log(`[Sync] Conflict state saved to note ${local.id}`);
-
                 } else {
-                    console.log(`[Sync] Update found for ${remote.noteId.slice(0, 6)}. Remote: ${remote.updatedAt}, Local: ${local.updatedAt}`);
-                    // Safe update (either no local changes, or we are just strictly behind)
+                    // Safe update
                     toUpdateLocal.push(fromConvexFormat(remote));
                 }
             } else if (local.updatedAt > remote.updatedAt) {
-                // Local is newer, update remote
-                toUpdateRemote.push(local);
+                // Local is newer
+                if (!local.synced) {
+                    // Only push if we explicitly have unsynced changes
+                    toUpdateRemote.push(local);
+                }
+                // If local.synced is true, it means we just pushed it but Remote Subscription hasn't caught up yet.
+                // Do NOT push again (breaks the loop).
+            } else {
+                // Timestamps equal - assume synced?
+                // console.log(`[Sync] Note ${local.id.slice(0,6)} is up to date.`);
             }
         }
 
@@ -320,7 +319,8 @@ export function useConvexSync(
         reportConnectionSuccess();
 
         lastSyncRef.current = Date.now();
-    }, [isEnabled, remoteNotes, localNotes, fromConvexFormat, onRemoteUpdate, pushAllUnsynced, reportConnectionSuccess]);
+        lastSyncRef.current = Date.now();
+    }, [isEnabled, remoteNotes, localNotes, fromConvexFormat, onRemoteUpdate, pushAllUnsynced, reportConnectionSuccess, localMarkAsSynced]);
 
     // Auto-sync on interval when enabled
     useEffect(() => {
