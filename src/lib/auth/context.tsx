@@ -1,7 +1,7 @@
 'use client';
 
 import { createContext, useContext, useState, useCallback, useEffect, ReactNode } from 'react';
-import { mnemonicToSeed, deriveEncryptionKey, deriveDeviceId, validateMnemonic } from '@/lib/crypto';
+import { mnemonicToSeed, deriveEncryptionKey, deriveSeedId, validateMnemonic } from '@/lib/crypto';
 import { encryptSessionWithPin, decryptSessionWithPin } from '@/lib/crypto/pin';
 
 interface AuthState {
@@ -9,7 +9,7 @@ interface AuthState {
     hasProtectedSession: boolean; // True if a PIN-encrypted session exists
     isLoading: boolean;
     encryptionKey: CryptoKey | null;
-    deviceId: string | null;
+    seedId: string | null;
 }
 
 interface AuthContextValue extends AuthState {
@@ -30,7 +30,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         hasProtectedSession: false,
         isLoading: true,
         encryptionKey: null,
-        deviceId: null,
+        seedId: null,
     });
 
     // Check for existing session on mount
@@ -58,16 +58,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
         try {
             const seed = mnemonicToSeed(phrase);
-            const [encryptionKey, deviceId] = await Promise.all([
+            const [encryptionKey, seedId] = await Promise.all([
                 deriveEncryptionKey(seed),
-                deriveDeviceId(seed),
+                deriveSeedId(seed),
             ]);
 
             setState((prev) => ({
                 ...prev,
                 isAuthenticated: true,
                 encryptionKey,
-                deviceId,
+                seedId,
             }));
 
             return true;
@@ -79,10 +79,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
     // Enable PIN protection
     const setupPin = useCallback(async (pin: string): Promise<boolean> => {
-        if (!state.encryptionKey || !state.deviceId) return false;
+        if (!state.encryptionKey || !state.seedId) return false;
 
         try {
-            const encryptedSession = await encryptSessionWithPin(state.encryptionKey, state.deviceId, pin);
+            const encryptedSession = await encryptSessionWithPin(state.encryptionKey, state.seedId, pin);
             localStorage.setItem(SESSION_KEY, encryptedSession);
             setState(prev => ({ ...prev, hasProtectedSession: true }));
             return true;
@@ -90,7 +90,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             console.error('Failed to setup PIN:', error);
             return false;
         }
-    }, [state.encryptionKey, state.deviceId]);
+    }, [state.encryptionKey, state.seedId]);
 
     // Unlock with PIN
     const unlockWithPin = useCallback(async (pin: string): Promise<boolean> => {
@@ -98,12 +98,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         if (!encryptedSession) return false;
 
         try {
-            const { key, deviceId } = await decryptSessionWithPin(encryptedSession, pin);
+            const { key, seedId } = await decryptSessionWithPin(encryptedSession, pin);
             setState((prev) => ({
                 ...prev,
                 isAuthenticated: true,
                 encryptionKey: key,
-                deviceId,
+                seedId,
             }));
             return true;
         } catch (error) {
@@ -118,7 +118,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             ...prev,
             isAuthenticated: false,
             encryptionKey: null,
-            deviceId: null,
+            seedId: null,
         }));
     }, []);
 
@@ -130,7 +130,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             hasProtectedSession: false,
             isLoading: false,
             encryptionKey: null,
-            deviceId: null,
+            seedId: null,
         });
     }, []);
 

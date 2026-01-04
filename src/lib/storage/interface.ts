@@ -10,15 +10,17 @@ import { EncryptedData } from '../crypto';
  */
 export interface EncryptedNote {
     id: string; // UUID v4
-    deviceId: string; // For multi-device tracking
+    seedId: string; // Renamed from deviceId: Derived from seed phrase, identifies the "user"
     encryptedContent: EncryptedData;
     encryptedTitle: EncryptedData;
+    encryptedFolder?: EncryptedData; // Encrypted folder name
     timestamp: number; // Created at (Unix ms)
     updatedAt: number; // Last updated (Unix ms)
     deleted: boolean; // Soft delete for sync
     deletedAt?: number; // Timestamp when deleted (for 30-day cleanup)
-    folder?: string; // Virtual folder path (e.g., "Personal/Duties")
     synced: boolean; // Has been synced to remote
+    baseHash?: string; // Content hash of the version we last synced from
+    conflictData?: EncryptedData; // Encrypted content of the remote version if conflict exists
     metadata: {
         size: number; // Plaintext size in bytes
         contentHash: string; // SHA-256 of plaintext
@@ -54,7 +56,7 @@ export interface StorageProvider {
     // Batch operations
     bulkSave(notes: EncryptedNote[]): Promise<string[]>;
     bulkDelete(ids: string[]): Promise<void>;
-    clearAllNotesForDevice(deviceId: string): Promise<void>;
+    clearAllNotesForSeed(seedId: string): Promise<void>;
 
     // Sync operations
     markAsSynced(id: string): Promise<void>;

@@ -39,11 +39,11 @@ export async function deriveEncryptionKey(seed: Uint8Array): Promise<CryptoKey> 
 }
 
 /**
- * Derive a device ID from the seed for multi-device sync
+ * Derive a seed ID from the seed for multi-device sync validation
  * Uses a different salt to ensure unique derivation
  */
-export async function deriveDeviceId(seed: Uint8Array): Promise<string> {
-    const deviceSalt = new TextEncoder().encode('kakograph-device-v1');
+export async function deriveSeedId(seed: Uint8Array): Promise<string> {
+    const deviceSalt = new TextEncoder().encode('kakograph-device-v1'); // Keep salt same for backward compat capability
 
     const baseKey = await crypto.subtle.importKey(
         'raw',
@@ -53,7 +53,7 @@ export async function deriveDeviceId(seed: Uint8Array): Promise<string> {
         ['deriveBits']
     );
 
-    const deviceIdBits = await crypto.subtle.deriveBits(
+    const seedIdBits = await crypto.subtle.deriveBits(
         {
             name: 'PBKDF2',
             salt: deviceSalt as Uint8Array<ArrayBuffer>,
@@ -61,10 +61,10 @@ export async function deriveDeviceId(seed: Uint8Array): Promise<string> {
             hash: 'SHA-256',
         },
         baseKey,
-        128 // 128 bits for device ID
+        128 // 128 bits for seed ID
     );
 
-    return bytesToHex(new Uint8Array(deviceIdBits));
+    return bytesToHex(new Uint8Array(seedIdBits));
 }
 
 /**

@@ -14,7 +14,7 @@ export interface AuthData {
     encryptedSeed: string; // Seed encrypted with PIN-derived key
     iv: string;
     authTag: string;
-    deviceId: string;
+    seedId: string; // Renamed from deviceId
 }
 
 /**
@@ -47,6 +47,19 @@ export class KakographDB extends Dexie {
     constructor() {
         super('KakographDB');
 
+        // Version 2: Renamed deviceId -> seedId, removed folder from index (encrypted)
+        this.version(2).stores({
+            notes: 'id, timestamp, updatedAt, synced, deleted, deletedAt, seedId',
+            auth: 'key', // seedId is stored in content, not indexed here
+            settings: 'key',
+            syncQueue: 'id, noteId, timestamp',
+        }).upgrade(tx => {
+            // Migration logic if needed, but we're doing a rewrite
+            // Just clearing old table or let it be implies data loss for old schema
+            // which is consistent with "overhaul"
+        });
+
+        // Keep version 1 for reference/history if browser still has it, but v2 overrides
         this.version(1).stores({
             notes: 'id, timestamp, updatedAt, synced, deleted, deletedAt, folder, deviceId',
             auth: 'key',

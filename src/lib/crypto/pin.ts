@@ -9,15 +9,15 @@ const PIN_ITERATIONS = 100_000;
 const SALT_length = 16;
 
 /**
- * Encrypt the master key and device ID with a PIN
+ * Encrypt the master key and seed ID with a PIN
  */
-export async function encryptSessionWithPin(masterKey: CryptoKey, deviceId: string, pin: string): Promise<string> {
+export async function encryptSessionWithPin(masterKey: CryptoKey, seedId: string, pin: string): Promise<string> {
     // 1. Export Master Key
     const masterKeyBytes = await crypto.subtle.exportKey('raw', masterKey);
     const masterKeyHex = bytesToHex(new Uint8Array(masterKeyBytes));
 
     // 2. CONST payload
-    const payload = JSON.stringify({ k: masterKeyHex, d: deviceId });
+    const payload = JSON.stringify({ k: masterKeyHex, d: seedId });
     const payloadBytes = new TextEncoder().encode(payload);
 
     // 3. Derive Wrapping Key from PIN
@@ -40,9 +40,9 @@ export async function encryptSessionWithPin(masterKey: CryptoKey, deviceId: stri
 }
 
 /**
- * Decrypt the session (key + deviceID) with a PIN
+ * Decrypt the session (key + seedId) with a PIN
  */
-export async function decryptSessionWithPin(encryptedData: string, pin: string): Promise<{ key: CryptoKey, deviceId: string }> {
+export async function decryptSessionWithPin(encryptedData: string, pin: string): Promise<{ key: CryptoKey, seedId: string }> {
     const [saltHex, ivHex, ciphertextHex] = encryptedData.split(':');
     if (!saltHex || !ivHex || !ciphertextHex) {
         throw new Error('Invalid encrypted data format');
@@ -67,7 +67,7 @@ export async function decryptSessionWithPin(encryptedData: string, pin: string):
         );
 
         const payloadString = new TextDecoder().decode(payloadBytes);
-        const { k: keyHex, d: deviceId } = JSON.parse(payloadString);
+        const { k: keyHex, d: seedId } = JSON.parse(payloadString);
 
         // 3. Import Master Key
         const masterKeyBytes = hexToBytes(keyHex);
@@ -79,7 +79,7 @@ export async function decryptSessionWithPin(encryptedData: string, pin: string):
             ['encrypt', 'decrypt']
         );
 
-        return { key, deviceId };
+        return { key, seedId };
     } catch (e) {
         console.error(e);
         throw new Error('Incorrect PIN');

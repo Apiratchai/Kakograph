@@ -29,6 +29,8 @@ interface DecryptedNote {
     updatedAt: number;
     folder?: string;
     deletedAt?: number;
+    baseHash?: string;
+    conflictContent?: string;
 }
 
 interface NotesState {
@@ -44,7 +46,7 @@ interface NotesState {
 }
 
 export function useNotes() {
-    const { encryptionKey, deviceId, isAuthenticated } = useAuth();
+    const { encryptionKey, seedId, isAuthenticated } = useAuth();
     const [storage] = useState(() => IndexedDBProvider.getInstance());
     const [state, setState] = useState<NotesState>({
         notes: [],
@@ -99,7 +101,7 @@ export function useNotes() {
 
             // Filter notes derived from the current seed (User ID) and cleanup old trash
             const encryptedNotes = allEncryptedNotes.filter((note) => {
-                if (note.deviceId !== deviceId) return false;
+                if (note.seedId !== seedId) return false;
 
                 // Check for auto-deletion
                 if (note.deleted && note.deletedAt && (now - note.deletedAt > THIRTY_DAYS_MS)) {
@@ -122,14 +124,44 @@ export function useNotes() {
                     const content = await decryptText(note.encryptedContent, encryptionKey);
                     const title = await decryptText(note.encryptedTitle, encryptionKey);
 
+                    let folder: string | undefined = undefined;
+                    if (note.encryptedFolder) {
+                        try {
+                            folder = await decryptText(note.encryptedFolder, encryptionKey);
+                        } catch (e) {
+                            console.warn(`Failed to decrypt folder for note ${note.id}`, e);
+                        }
+                        try {
+                            folder = await decryptText(note.encryptedFolder, encryptionKey);
+                        } catch (e) {
+                            console.warn(`Failed to decrypt folder for note ${note.id}`, e);
+                        }
+                    } else if ((note as any).folder) {
+                        // Legacy support during migration
+                        folder = (note as any).folder;
+                    }
+
+                    // Decrypt conflict data if present
+                    let conflictContent: string | undefined;
+                    if (note.conflictData) {
+                        try {
+                            conflictContent = await decryptText(note.conflictData, encryptionKey);
+                        } catch (e) {
+                            console.warn(`Failed to decrypt conflict data for note ${note.id}`, e);
+                        }
+                    }
+
                     const decryptedNote = {
                         id: note.id,
                         title,
                         content,
                         timestamp: note.timestamp,
                         updatedAt: note.updatedAt,
-                        folder: note.folder,
-                        deletedAt: note.deletedAt
+                        folder,
+                        deletedAt: note.deletedAt,
+                        // NEW: Pass through fields for conflict UI
+                        baseHash: note.baseHash,
+                        conflictContent // Decrypted remote content
                     };
 
                     if (note.deleted) {
@@ -166,11 +198,11 @@ export function useNotes() {
                 error: 'Failed to load notes',
             }));
         }
-    }, [encryptionKey, storage, deviceId]);
+    }, [encryptionKey, storage, seedId]);
 
     // Save current note
     const saveNote = useCallback(async (content: string) => {
-        if (!encryptionKey || !deviceId) return;
+        if (!encryptionKey || !seedId) return;
 
         setState((prev) => ({ ...prev, isSaving: true }));
 
@@ -178,22 +210,37 @@ export function useNotes() {
             const title = extractTitle(content);
             const now = Date.now();
             const contentHash = await hashContent(content);
+            const folderName = state.currentNote?.folder;
 
-            // Encrypt title and content
-            const [encryptedContent, encryptedTitle] = await Promise.all([
+            // Encrypt title, content, and folder
+            const promises: Promise<any>[] = [
                 encryptText(content, encryptionKey),
                 encryptText(title, encryptionKey),
-            ]);
+            ];
+
+            if (folderName) {
+                promises.push(encryptText(folderName, encryptionKey));
+            } else {
+                promises.push(Promise.resolve(undefined));
+            }
+
+            const [encryptedContent, encryptedTitle, encryptedFolder] = await Promise.all(promises);
 
             const encryptedNote: EncryptedNote = {
                 id: state.currentNote?.id || createNoteId(),
-                deviceId,
+                seedId,
                 encryptedContent,
                 encryptedTitle,
+                encryptedFolder,
+                // Preserve baseHash if we are updating (it shouldn't change until we sync)
+                baseHash: state.currentNote?.baseHash,
+                // Clear conflict data on save (Resolution strategy: Local Overwrite)
+                // If user resolves via UI, that specific function will handle merging.
+                // Standard save implies "I win".
+                conflictData: undefined,
                 timestamp: state.currentNote?.timestamp || now,
                 updatedAt: now,
                 deleted: false,
-                folder: state.currentNote?.folder, // Preserve folder
                 synced: false,
                 metadata: {
                     size: new TextEncoder().encode(content).length,
@@ -214,7 +261,7 @@ export function useNotes() {
                 content,
                 timestamp: encryptedNote.timestamp,
                 updatedAt: encryptedNote.updatedAt,
-                folder: encryptedNote.folder,
+                folder: folderName,
             };
 
             setState((prev) => {
@@ -246,11 +293,11 @@ export function useNotes() {
                 error: 'Failed to save note',
             }));
         }
-    }, [encryptionKey, deviceId, storage, state.currentNote, extractTitle, loadNotes]);
+    }, [encryptionKey, seedId, storage, state.currentNote, extractTitle, loadNotes]);
 
     // Create new note
     const createNewNote = useCallback(async (initialFolder?: string) => {
-        if (!encryptionKey || !deviceId) return;
+        if (!encryptionKey || !seedId) return;
 
         const content = '';
         const title = 'Untitled';
@@ -259,21 +306,29 @@ export function useNotes() {
 
         try {
             // Encrypt title and content
-            const [encryptedContent, encryptedTitle] = await Promise.all([
+            const promises: Promise<any>[] = [
                 encryptText(content, encryptionKey),
                 encryptText(title, encryptionKey),
-            ]);
+            ];
+
+            if (initialFolder) {
+                promises.push(encryptText(initialFolder, encryptionKey));
+            } else {
+                promises.push(Promise.resolve(undefined));
+            }
+
+            const [encryptedContent, encryptedTitle, encryptedFolder] = await Promise.all(promises);
 
             const encryptedNote: EncryptedNote = {
                 id: createNoteId(),
-                deviceId,
+                seedId,
                 encryptedContent,
                 encryptedTitle,
+                encryptedFolder,
                 timestamp: now,
                 updatedAt: now,
                 deleted: false,
                 synced: false,
-                folder: initialFolder,
                 metadata: {
                     size: 0,
                     contentHash,
@@ -302,7 +357,7 @@ export function useNotes() {
         } catch (err) {
             console.error('Failed to create new note:', err);
         }
-    }, [encryptionKey, deviceId, storage, loadNotes]);
+    }, [encryptionKey, seedId, storage, loadNotes]);
 
     // Select a note
     const selectNote = useCallback((id: string) => {
@@ -381,8 +436,12 @@ export function useNotes() {
 
     // Move note to folder
     const moveNote = useCallback(async (id: string, folder: string) => {
+        if (!encryptionKey) return;
         try {
-            await storage.updateNote(id, { folder });
+            const encryptedFolder = folder ? await encryptText(folder, encryptionKey) : undefined;
+
+            // We need to update the encrypted folder in the DB
+            await storage.updateNote(id, { encryptedFolder });
 
             setState(prev => ({
                 ...prev,
@@ -394,7 +453,7 @@ export function useNotes() {
         } catch (err) {
             console.error('Failed to move note:', err);
         }
-    }, [storage, loadNotes]);
+    }, [storage, loadNotes, encryptionKey]);
 
     // Optimistic local update (as user types)
     const updateNoteLocal = useCallback((content: string) => {
@@ -431,25 +490,34 @@ export function useNotes() {
 
     // Import a note (preserving ID and timestamps)
     const importNote = useCallback(async (note: DecryptedNote, isDeleted: boolean = false) => {
-        if (!encryptionKey || !deviceId) return;
+        if (!encryptionKey || !seedId) return;
 
         try {
             const contentHash = await hashContent(note.content);
-            const [encryptedContent, encryptedTitle] = await Promise.all([
+
+            const promises: Promise<any>[] = [
                 encryptText(note.content, encryptionKey),
                 encryptText(note.title, encryptionKey),
-            ]);
+            ];
+
+            if (note.folder) {
+                promises.push(encryptText(note.folder, encryptionKey));
+            } else {
+                promises.push(Promise.resolve(undefined));
+            }
+
+            const [encryptedContent, encryptedTitle, encryptedFolder] = await Promise.all(promises);
 
             const encryptedNote: EncryptedNote = {
                 id: note.id, // Preserve ID
-                deviceId,    // Re-assign to current user
+                seedId,    // Re-assign to current user
                 encryptedContent,
                 encryptedTitle,
+                encryptedFolder,
                 timestamp: note.timestamp,
                 updatedAt: note.updatedAt,
                 deleted: isDeleted,
                 deletedAt: isDeleted ? (note.deletedAt || Date.now()) : undefined,
-                folder: note.folder,
                 synced: false,
                 metadata: {
                     size: new TextEncoder().encode(note.content).length,
@@ -466,7 +534,7 @@ export function useNotes() {
             console.error('Failed to import note:', err);
             throw err;
         }
-    }, [encryptionKey, deviceId, storage, extractTitle]);
+    }, [encryptionKey, seedId, storage, extractTitle]);
 
     // Bulk delete notes (Soft Delete)
     const deleteNotes = useCallback(async (ids: string[]) => {
@@ -521,9 +589,9 @@ export function useNotes() {
 
     // Clear all notes for full snapshot restore
     const clearAllNotes = useCallback(async () => {
-        if (!deviceId) return;
+        if (!seedId) return;
         try {
-            await storage.clearAllNotesForDevice(deviceId);
+            await storage.clearAllNotesForSeed(seedId);
             setState(prev => ({
                 ...prev,
                 notes: [],
@@ -534,7 +602,7 @@ export function useNotes() {
         } catch (err) {
             console.error('Failed to clear notes:', err);
         }
-    }, [storage, deviceId]);
+    }, [storage, seedId]);
 
     // Handle remote updates from Convex
     const handleRemoteUpdate = useCallback(async (incomingNotes: EncryptedNote[]) => {
@@ -553,7 +621,7 @@ export function useNotes() {
 
     // Initialize Sync Service
     const syncService = useConvexSync(
-        deviceId,
+        seedId,
         state.encryptedNotes,
         handleRemoteUpdate
     );
@@ -577,15 +645,14 @@ export function useNotes() {
 
     const hardDeleteWithSync = useCallback(async (id: string) => {
         // 1. Push to remote first to avoid re-syncing before we delete locally
-        // This is important because fullSync pulls back missing local notes
         try {
             await syncService.pushHardDelete(id);
+            // 2. Only perform local delete if push succeeded
+            await permanentlyDeleteNote(id);
         } catch (error) {
-            console.warn('[Sync] Failed to push hard delete, following through with local delete:', error);
+            console.error('[Sync] Failed to push hard delete, aborting local delete to prevent zombie note:', error);
+            // TODO: Notify user via toast
         }
-
-        // 2. Perform local delete
-        await permanentlyDeleteNote(id);
     }, [permanentlyDeleteNote, syncService]);
 
     const restoreNoteWithSync = useCallback(async (id: string) => {

@@ -29,7 +29,20 @@ export class IndexedDBProvider implements StorageProvider {
         }).catch(err => console.error('[Storage] Persistent error:', err));
 
         // Open the database
-        await getDB().open();
+        const db = getDB();
+        await db.open();
+
+        // Migration: detailed deviceId -> seedId
+        try {
+            await db.notes
+                .filter((node: any) => !!node.deviceId && !node.seedId)
+                .modify((note: any) => {
+                    note.seedId = note.deviceId;
+                });
+        } catch (err) {
+            console.error('[Storage] Migration failed:', err);
+        }
+
         this.initialized = true;
     }
 
@@ -143,10 +156,10 @@ export class IndexedDBProvider implements StorageProvider {
         return notes.map((n) => n.id);
     }
 
-    // Clear all notes for a specific deviceId (used for full snapshot restore)
-    async clearAllNotesForDevice(deviceId: string): Promise<void> {
+    // Clear all notes for a specific seedId (used for full snapshot restore / full reset)
+    async clearAllNotesForSeed(seedId: string): Promise<void> {
         const db = getDB();
-        await db.notes.where('deviceId').equals(deviceId).delete();
+        await db.notes.where('seedId').equals(seedId).delete();
     }
 
     async bulkDelete(ids: string[]): Promise<void> {

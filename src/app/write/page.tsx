@@ -78,7 +78,7 @@ const TableOfContents = ({ content }: { content: string }) => {
 
 export default function WritePage() {
     const router = useRouter();
-    const { isAuthenticated, isLoading: authLoading, setupPin, hasProtectedSession, logout } = useAuth();
+    const { isAuthenticated, isLoading: authLoading, setupPin, hasProtectedSession, logout, seedId } = useAuth();
     const { theme, setTheme } = useTheme();
     const [isSidebarOpen, setIsSidebarOpen] = useState(false);
     const [showPinDialog, setShowPinDialog] = useState(false);
@@ -333,12 +333,11 @@ export default function WritePage() {
     }, [isAuthenticated, loadNotes]);
 
     // Set content when current note changes
+    // Set content when current note changes
     useEffect(() => {
         if (currentNote) {
-            console.log('[UI] CurrentNote changed. ID:', currentNote.id.slice(0, 8), 'Updated:', new Date(currentNote.updatedAt || 0).toLocaleTimeString());
             setContent(currentNote.content);
         } else {
-            console.log('[UI] No current note');
             setContent('');
         }
     }, [currentNote]);
@@ -372,6 +371,14 @@ export default function WritePage() {
             setLastSaved(new Date());
         }
     }, [content, saveNote]);
+
+    // Conflict Resolution Handler
+    const handleResolveConflict = useCallback(async () => {
+        // Saving the current content (which the user has edited/merged) clears the conflict state
+        // because saveNote sets conflictData to undefined.
+        await handleSave();
+        showAlert('Conflict Resolved', 'Your changes have been saved and the conflict is resolved.');
+    }, [handleSave]);
 
     // New note
     const handleNewNote = useCallback(() => {
@@ -623,11 +630,20 @@ export default function WritePage() {
 
             {/* PIN Dialog */}
             {showPinDialog && (
-                <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-[200] flex items-center justify-center p-4">
-                    <div className="bg-slate-900 p-6 rounded-2xl w-full max-w-sm border border-slate-700 shadow-2xl relative">
+                <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[200] flex items-center justify-center p-4">
+                    <div
+                        className="p-6 rounded-2xl w-full max-w-sm shadow-2xl relative"
+                        style={{
+                            backgroundColor: 'var(--surface-elevated)',
+                            border: '1px solid var(--border-primary)'
+                        }}
+                    >
                         <button
                             onClick={() => setShowPinDialog(false)}
-                            className="absolute top-4 right-4 text-slate-500 hover:text-slate-300"
+                            className="absolute top-4 right-4 transition-colors"
+                            style={{ color: 'var(--text-muted)' }}
+                            onMouseEnter={e => e.currentTarget.style.color = 'var(--text-primary)'}
+                            onMouseLeave={e => e.currentTarget.style.color = 'var(--text-muted)'}
                         >
                             &times;
                         </button>
@@ -636,7 +652,7 @@ export default function WritePage() {
                             loading={pinLoading}
                             label="Create Login PIN"
                         />
-                        <p className="text-center text-slate-500 text-xs mt-4">
+                        <p className="text-center text-xs mt-4" style={{ color: 'var(--text-muted)' }}>
                             You'll need this to unlock your notes on this device.
                         </p>
                     </div>
@@ -827,6 +843,27 @@ export default function WritePage() {
                             )}
                         </div>
                     </div>
+
+                    {/* Seed ID for debugging sync */}
+                    {seedId && (
+                        <div
+                            className="flex items-center justify-between p-3 rounded-lg"
+                            style={{ backgroundColor: 'var(--surface-secondary)' }}
+                        >
+                            <span className="text-sm" style={{ color: 'var(--text-muted)' }}>Seed ID</span>
+                            <code
+                                className="text-xs font-mono px-2 py-1 rounded cursor-pointer"
+                                style={{ backgroundColor: 'var(--surface-tertiary)', color: 'var(--text-secondary)' }}
+                                onClick={() => {
+                                    navigator.clipboard.writeText(seedId);
+                                    alert('Seed ID copied!');
+                                }}
+                                title="Click to copy full ID"
+                            >
+                                {seedId.slice(0, 8)}...
+                            </code>
+                        </div>
+                    )}
                 </div>
             </Modal>
 
@@ -871,29 +908,29 @@ export default function WritePage() {
                             {Object.keys(groupedNotes).filter(k => k !== 'ROOT').sort().map(folder => (
                                 <div key={folder} className="folder-group mb-1">
                                     <div
-                                        className="flex items-center justify-between gap-2 px-3 py-2 text-slate-400 hover:text-slate-200 cursor-pointer hover:bg-slate-800/50 rounded transition-colors group"
+                                        className="flex items-center justify-between gap-2 px-2 py-1.5 text-slate-400 hover:text-slate-200 cursor-pointer hover:bg-slate-800/50 rounded transition-colors group"
                                         onDragOver={handleDragOver}
                                         onDrop={(e) => handleDrop(e, folder)}
                                     >
-                                        <div
-                                            className="flex items-center gap-2 flex-1 overflow-hidden"
+                                        <button
+                                            className="flex items-center gap-2 flex-1 overflow-hidden p-1.5 -m-1.5 rounded hover:bg-slate-700/50 min-h-[36px]"
                                             onClick={() => toggleFolder(folder)}
                                         >
-                                            <div className={`transform transition-transform duration-200 ${expandedFolders.has(folder) ? 'rotate-90' : ''}`}>
-                                                <ChevronRight size={14} />
+                                            <div className={`transform transition-transform duration-200 p-1 ${expandedFolders.has(folder) ? 'rotate-90' : ''}`}>
+                                                <ChevronRight size={16} />
                                             </div>
-                                            <Folder size={14} className="text-blue-400/80 flex-shrink-0" />
+                                            <Folder size={16} className="text-blue-400/80 flex-shrink-0" />
                                             <span className="text-sm font-medium truncate select-none">{folder}</span>
-                                        </div>
+                                        </button>
                                         <button
-                                            className="p-1 text-slate-600 hover:text-red-400 opacity-60 group-hover:opacity-100 transition-opacity"
+                                            className="p-2 text-slate-600 hover:text-red-400 opacity-60 group-hover:opacity-100 transition-opacity rounded hover:bg-slate-700/50"
                                             onClick={(e) => {
                                                 e.stopPropagation();
                                                 deleteFolder(folder);
                                             }}
                                             title="Delete Folder"
                                         >
-                                            <Trash2 size={12} />
+                                            <Trash2 size={14} />
                                         </button>
                                     </div>
 
@@ -912,7 +949,10 @@ export default function WritePage() {
                                                         draggable
                                                         onDragStart={(e) => handleDragStart(e, note.id)}
                                                     >
-                                                        <div className="note-title truncate">{note.title || 'Untitled'}</div>
+                                                        <div className="note-title truncate">
+                                                            {note.conflictContent && <span className="mr-1" title="Conflict Detected">⚠️</span>}
+                                                            {note.title || 'Untitled'}
+                                                        </div>
                                                         <button
                                                             className="delete-button"
                                                             onClick={(e) => {
@@ -943,7 +983,10 @@ export default function WritePage() {
                                         onDragStart={(e) => handleDragStart(e, note.id)}
                                     >
                                         <div className="note-info overflow-hidden">
-                                            <div className="note-title truncate">{note.title || 'Untitled'}</div>
+                                            <div className="note-title truncate">
+                                                {note.conflictContent && <span className="mr-1" title="Conflict Detected">⚠️</span>}
+                                                {note.title || 'Untitled'}
+                                            </div>
                                             <div className="note-date">
                                                 {new Date(note.updatedAt).toLocaleDateString()}
                                             </div>
@@ -1296,6 +1339,9 @@ export default function WritePage() {
                             onNoteSelect={selectNote}
                             className="bg-transparent min-h-full"
                             showToolbar={viewMode === 'editor'}
+                            // Pass Conflict Props
+                            conflictContent={currentNote?.conflictContent}
+                            onResolveConflict={handleResolveConflict}
                         />
                     </div>
 

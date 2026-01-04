@@ -119,6 +119,9 @@ interface RichEditorProps {
     showToolbar?: boolean;
     notes?: Array<{ id: string; title: string }>;
     onNoteSelect?: (id: string) => void;
+    // NEW: Conflict Resolution Props
+    conflictContent?: string;
+    onResolveConflict?: () => void;
 }
 
 export function RichEditor({
@@ -131,17 +134,29 @@ export function RichEditor({
     showToolbar = true,
     notes = [],
     onNoteSelect,
+    conflictContent,    // New Prop
+    onResolveConflict,  // New Prop
 }: RichEditorProps) {
     const [isSaving, setIsSaving] = useState(false);
     const isProgrammaticUpdate = useRef(false);
-    const colorInputRef = useRef<HTMLInputElement>(null);
-    const highlightInputRef = useRef<HTMLInputElement>(null);
 
     // Link modal state
     const [showLinkModal, setShowLinkModal] = useState(false);
     const [linkUrl, setLinkUrl] = useState('');
     const [linkText, setLinkText] = useState('');
     const [needsLinkText, setNeedsLinkText] = useState(false);
+
+    // Color picker modal states
+    const [showTextColorModal, setShowTextColorModal] = useState(false);
+    const [showHighlightModal, setShowHighlightModal] = useState(false);
+
+    // Predefined color palette
+    const colorPalette = [
+        '#ef4444', '#f97316', '#f59e0b', '#eab308', '#84cc16', '#22c55e',
+        '#10b981', '#14b8a6', '#06b6d4', '#0ea5e9', '#3b82f6', '#6366f1',
+        '#8b5cf6', '#a855f7', '#d946ef', '#ec4899', '#f43f5e', '#64748b',
+        '#000000', '#ffffff'
+    ];
 
     // Track notes in ref to access inside suggestion (closure) without re-init editor
     const notesRef = useRef(notes);
@@ -244,6 +259,32 @@ export function RichEditor({
             onChange?.(editor.getHTML());
         },
     });
+
+    // Second Editor for Conflict View (Read-Only)
+    const conflictEditor = useEditor({
+        immediatelyRender: false,
+        extensions: [
+            StarterKit.configure({ codeBlock: false }),
+            CodeBlockLowlight.configure({ lowlight }),
+            Table.configure({ resizable: true }),
+            TableRow, TableHeader, TableCell,
+            ResizableImage,
+        ],
+        content: conflictContent || '',
+        editable: false,
+        editorProps: {
+            attributes: {
+                class: 'rich-editor-content prose prose-invert max-w-none focus:outline-none opacity-80',
+            },
+        },
+    }, [conflictContent]); // Re-create if content changes
+
+    // Update conflict editor content when prop changes
+    useEffect(() => {
+        if (conflictEditor && conflictContent && conflictContent !== conflictEditor.getHTML()) {
+            conflictEditor.commands.setContent(conflictContent);
+        }
+    }, [conflictContent, conflictEditor]);
 
     // Handle Wiki Link Clicks
     useEffect(() => {
@@ -357,6 +398,71 @@ export function RichEditor({
         return null;
     }
 
+    if (!editor) {
+        return null;
+    }
+
+    // SPLIT VIEW MODE (If conflict detected)
+    if (conflictContent && conflictEditor) {
+        return (
+            <div className={`rich-editor ${className} flex flex-col h-full`}>
+                {/* Conflict Header */}
+                <div className="bg-red-500/10 border-b border-red-500/20 p-4 flex items-center justify-between">
+                    <div>
+                        <h3 className="text-red-400 font-bold flex items-center gap-2">
+                            ⚠️ Conflict Detected
+                        </h3>
+                        <p className="text-xs text-[var(--text-secondary)] mt-1">
+                            This note was modified on another device.
+                            <br />
+                            <strong>Left:</strong> Your version (Editable). <strong>Right:</strong> Their version.
+                            <br />
+                            Manually copy what you want to keep from Right to Left, then click Resolve.
+                        </p>
+                    </div>
+                    <div className="flex gap-2">
+                        <button
+                            onClick={onResolveConflict}
+                            className="px-4 py-2 bg-green-600 hover:bg-green-700 text-white rounded font-medium transition-colors shadow-sm"
+                        >
+                            ✅ Resolve & Save
+                        </button>
+                    </div>
+                </div>
+
+                {/* Split Editors */}
+                <div className="flex-1 flex overflow-hidden">
+                    {/* LEFT: Local (Editable) */}
+                    <div className="flex-1 flex flex-col border-r border-[var(--border-primary)] relative">
+                        <div className="p-2 bg-[var(--surface-secondary)] text-xs text-center font-bold text-[var(--text-secondary)] border-b border-[var(--border-primary)]">
+                            YOUR VERSION (EDIT HERE)
+                        </div>
+                        {showToolbar && editable && (
+                            <div className="editor-toolbar sticky top-0 z-10 border-b border-[var(--border-primary)]">
+                                {/* Simplified Toolbar for Split View space constraint */}
+                                <div className="toolbar-group">
+                                    <button onClick={() => editor.chain().focus().toggleBold().run()} className={editor.isActive('bold') ? 'is-active' : ''}><Bold size={14} /></button>
+                                    <button onClick={() => editor.chain().focus().toggleItalic().run()} className={editor.isActive('italic') ? 'is-active' : ''}><Italic size={14} /></button>
+                                    <button onClick={() => editor.chain().focus().toggleBulletList().run()} className={editor.isActive('bulletList') ? 'is-active' : ''}><List size={14} /></button>
+                                </div>
+                            </div>
+                        )}
+                        <EditorContent editor={editor} className="rich-editor-content flex-1 overflow-y-auto p-4" />
+                    </div>
+
+                    {/* RIGHT: Remote (Read-Only) */}
+                    <div className="flex-1 flex flex-col bg-[var(--surface-secondary)]/30">
+                        <div className="p-2 bg-[var(--surface-secondary)] text-xs text-center font-bold text-red-400 border-b border-[var(--border-primary)]">
+                            THEIR VERSION (READ ONLY)
+                        </div>
+                        <EditorContent editor={conflictEditor} className="rich-editor-content flex-1 overflow-y-auto p-4 select-text" />
+                    </div>
+                </div>
+            </div>
+        );
+    }
+
+    // NORMAL MODE
     return (
         <div className={`rich-editor ${className} ${!editable ? 'readonly' : ''}`}>
             <input
@@ -498,45 +604,18 @@ export function RichEditor({
                     <div className="toolbar-separator" />
 
                     <div className="toolbar-group">
-                        <input
-                            ref={colorInputRef}
-                            type="color"
-                            className="hidden"
-                            onChange={(e) => editor.chain().focus().setColor(e.target.value).run()}
-                        />
                         <button
-                            onClick={() => colorInputRef.current?.click()}
+                            onClick={() => setShowTextColorModal(true)}
                             title="Text Color"
                         >
                             <Palette size={16} />
                         </button>
                         <button
-                            onClick={() => editor.chain().focus().unsetColor().run()}
-                            title="Clear Text Color"
-                            className="text-xs"
-                        >
-                            <X size={12} />
-                        </button>
-                        <input
-                            ref={highlightInputRef}
-                            type="color"
-                            defaultValue="#fef08a"
-                            className="hidden"
-                            onChange={(e) => editor.chain().focus().toggleHighlight({ color: e.target.value }).run()}
-                        />
-                        <button
-                            onClick={() => highlightInputRef.current?.click()}
+                            onClick={() => setShowHighlightModal(true)}
                             className={editor.isActive('highlight') ? 'is-active' : ''}
                             title="Highlight"
                         >
                             <Highlighter size={16} />
-                        </button>
-                        <button
-                            onClick={() => editor.chain().focus().unsetHighlight().run()}
-                            title="Clear Highlight"
-                            className="text-xs"
-                        >
-                            <X size={12} />
                         </button>
                     </div>
 
@@ -673,6 +752,78 @@ export function RichEditor({
                                 Insert Link
                             </button>
                         </div>
+                    </div>
+                </div>
+            )}
+
+            {/* Text Color Modal */}
+            {showTextColorModal && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50" onClick={() => setShowTextColorModal(false)}>
+                    <div
+                        className="bg-[var(--surface-elevated)] rounded-lg shadow-xl p-4 w-full max-w-xs mx-4"
+                        onClick={(e) => e.stopPropagation()}
+                    >
+                        <h3 className="text-lg font-semibold text-[var(--text-primary)] mb-3">Text Color</h3>
+                        <div className="grid grid-cols-5 gap-2 mb-4">
+                            {colorPalette.map((color) => (
+                                <button
+                                    key={color}
+                                    className="w-10 h-10 rounded-lg border-2 border-transparent hover:border-[var(--accent-blue)] transition-colors hover:scale-110"
+                                    style={{ backgroundColor: color, boxShadow: color === '#ffffff' ? 'inset 0 0 0 1px var(--border-primary)' : undefined }}
+                                    onClick={() => {
+                                        editor.chain().focus().setColor(color).run();
+                                        setShowTextColorModal(false);
+                                    }}
+                                    title={color}
+                                />
+                            ))}
+                        </div>
+                        <button
+                            onClick={() => {
+                                editor.chain().focus().unsetColor().run();
+                                setShowTextColorModal(false);
+                            }}
+                            className="w-full py-2 text-sm font-medium rounded-lg transition-colors bg-[var(--surface-secondary)] hover:bg-[var(--hover-bg)] text-[var(--text-secondary)] flex items-center justify-center gap-2"
+                        >
+                            <X size={14} />
+                            Clear Color
+                        </button>
+                    </div>
+                </div>
+            )}
+
+            {/* Highlight Color Modal */}
+            {showHighlightModal && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50" onClick={() => setShowHighlightModal(false)}>
+                    <div
+                        className="bg-[var(--surface-elevated)] rounded-lg shadow-xl p-4 w-full max-w-xs mx-4"
+                        onClick={(e) => e.stopPropagation()}
+                    >
+                        <h3 className="text-lg font-semibold text-[var(--text-primary)] mb-3">Highlight Color</h3>
+                        <div className="grid grid-cols-5 gap-2 mb-4">
+                            {colorPalette.map((color) => (
+                                <button
+                                    key={color}
+                                    className="w-10 h-10 rounded-lg border-2 border-transparent hover:border-[var(--accent-blue)] transition-colors hover:scale-110"
+                                    style={{ backgroundColor: color, boxShadow: color === '#ffffff' ? 'inset 0 0 0 1px var(--border-primary)' : undefined }}
+                                    onClick={() => {
+                                        editor.chain().focus().toggleHighlight({ color }).run();
+                                        setShowHighlightModal(false);
+                                    }}
+                                    title={color}
+                                />
+                            ))}
+                        </div>
+                        <button
+                            onClick={() => {
+                                editor.chain().focus().unsetHighlight().run();
+                                setShowHighlightModal(false);
+                            }}
+                            className="w-full py-2 text-sm font-medium rounded-lg transition-colors bg-[var(--surface-secondary)] hover:bg-[var(--hover-bg)] text-[var(--text-secondary)] flex items-center justify-center gap-2"
+                        >
+                            <X size={14} />
+                            Clear Highlight
+                        </button>
                     </div>
                 </div>
             )}

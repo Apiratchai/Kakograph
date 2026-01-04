@@ -11,14 +11,14 @@ import { v } from 'convex/values';
 // Shared validator for note structure
 const noteValidator = v.object({
     noteId: v.string(),
-    deviceId: v.string(),
+    seedId: v.string(),
     encryptedContent: v.string(),
     encryptedTitle: v.string(),
+    encryptedFolder: v.optional(v.string()),
     timestamp: v.number(),
     updatedAt: v.number(),
     deleted: v.boolean(),
     deletedAt: v.optional(v.number()),
-    folder: v.optional(v.string()),
     metadata: v.object({
         size: v.number(),
         contentHash: v.string(),
@@ -32,11 +32,11 @@ const noteValidator = v.object({
 export const upsertNote = mutation({
     args: noteValidator.fields,
     handler: async (ctx, args) => {
-        // Find existing note by noteId AND deviceId
+        // Find existing note by noteId AND seedId
         const existing = await ctx.db
             .query('notes')
-            .withIndex('by_device_noteId', (q) =>
-                q.eq('deviceId', args.deviceId).eq('noteId', args.noteId)
+            .withIndex('by_seed_noteId', (q) =>
+                q.eq('seedId', args.seedId).eq('noteId', args.noteId)
             )
             .first();
 
@@ -46,10 +46,10 @@ export const upsertNote = mutation({
                 await ctx.db.patch(existing._id, {
                     encryptedContent: args.encryptedContent,
                     encryptedTitle: args.encryptedTitle,
+                    encryptedFolder: args.encryptedFolder,
                     updatedAt: args.updatedAt,
                     deleted: args.deleted,
                     deletedAt: args.deletedAt,
-                    folder: args.folder,
                     metadata: args.metadata,
                 });
             }
@@ -67,14 +67,14 @@ export const upsertNote = mutation({
 export const softDeleteNote = mutation({
     args: {
         noteId: v.string(),
-        deviceId: v.string(),
+        seedId: v.string(),
         deletedAt: v.number(),
     },
     handler: async (ctx, args) => {
         const note = await ctx.db
             .query('notes')
-            .withIndex('by_device_noteId', (q) =>
-                q.eq('deviceId', args.deviceId).eq('noteId', args.noteId)
+            .withIndex('by_seed_noteId', (q) =>
+                q.eq('seedId', args.seedId).eq('noteId', args.noteId)
             )
             .first();
 
@@ -94,13 +94,13 @@ export const softDeleteNote = mutation({
 export const hardDeleteNote = mutation({
     args: {
         noteId: v.string(),
-        deviceId: v.string(),
+        seedId: v.string(),
     },
     handler: async (ctx, args) => {
         const note = await ctx.db
             .query('notes')
-            .withIndex('by_device_noteId', (q) =>
-                q.eq('deviceId', args.deviceId).eq('noteId', args.noteId)
+            .withIndex('by_seed_noteId', (q) =>
+                q.eq('seedId', args.seedId).eq('noteId', args.noteId)
             )
             .first();
 
@@ -116,15 +116,14 @@ export const hardDeleteNote = mutation({
 export const restoreNote = mutation({
     args: {
         noteId: v.string(),
-        deviceId: v.string(),
+        seedId: v.string(),
         updatedAt: v.number(),
-        folder: v.optional(v.string()),
     },
     handler: async (ctx, args) => {
         const note = await ctx.db
             .query('notes')
-            .withIndex('by_device_noteId', (q) =>
-                q.eq('deviceId', args.deviceId).eq('noteId', args.noteId)
+            .withIndex('by_seed_noteId', (q) =>
+                q.eq('seedId', args.seedId).eq('noteId', args.noteId)
             )
             .first();
 
@@ -133,83 +132,55 @@ export const restoreNote = mutation({
                 deleted: false,
                 deletedAt: undefined,
                 updatedAt: args.updatedAt,
-                folder: args.folder,
             });
         }
     },
 });
 
 /**
- * Update note folder
- */
-export const moveNote = mutation({
-    args: {
-        noteId: v.string(),
-        deviceId: v.string(),
-        folder: v.optional(v.string()),
-        updatedAt: v.number(),
-    },
-    handler: async (ctx, args) => {
-        const note = await ctx.db
-            .query('notes')
-            .withIndex('by_device_noteId', (q) =>
-                q.eq('deviceId', args.deviceId).eq('noteId', args.noteId)
-            )
-            .first();
-
-        if (note) {
-            await ctx.db.patch(note._id, {
-                folder: args.folder || undefined,
-                updatedAt: args.updatedAt,
-            });
-        }
-    },
-});
-
-/**
- * Get all notes for a device (active notes only)
+ * Get all notes for a seed (active notes only)
  */
 export const getActiveNotes = query({
     args: {
-        deviceId: v.string(),
+        seedId: v.string(),
     },
     handler: async (ctx, args) => {
         return await ctx.db
             .query('notes')
-            .withIndex('by_device_deleted', (q) =>
-                q.eq('deviceId', args.deviceId).eq('deleted', false)
+            .withIndex('by_seed_deleted', (q) =>
+                q.eq('seedId', args.seedId).eq('deleted', false)
             )
             .collect();
     },
 });
 
 /**
- * Get all notes for a device (including deleted/trash)
+ * Get all notes for a seed (including deleted/trash)
  */
 export const getAllNotes = query({
     args: {
-        deviceId: v.string(),
+        seedId: v.string(),
     },
     handler: async (ctx, args) => {
         return await ctx.db
             .query('notes')
-            .withIndex('by_device', (q) => q.eq('deviceId', args.deviceId))
+            .withIndex('by_seed', (q) => q.eq('seedId', args.seedId))
             .collect();
     },
 });
 
 /**
- * Get trash notes for a device
+ * Get trash notes for a seed
  */
 export const getTrashNotes = query({
     args: {
-        deviceId: v.string(),
+        seedId: v.string(),
     },
     handler: async (ctx, args) => {
         return await ctx.db
             .query('notes')
-            .withIndex('by_device_deleted', (q) =>
-                q.eq('deviceId', args.deviceId).eq('deleted', true)
+            .withIndex('by_seed_deleted', (q) =>
+                q.eq('seedId', args.seedId).eq('deleted', true)
             )
             .collect();
     },
@@ -220,21 +191,21 @@ export const getTrashNotes = query({
  */
 export const getNotesAfterTimestamp = query({
     args: {
-        deviceId: v.string(),
+        seedId: v.string(),
         timestamp: v.number(),
     },
     handler: async (ctx, args) => {
         return await ctx.db
             .query('notes')
-            .withIndex('by_device_updated', (q) =>
-                q.eq('deviceId', args.deviceId).gt('updatedAt', args.timestamp)
+            .withIndex('by_seed_updated', (q) =>
+                q.eq('seedId', args.seedId).gt('updatedAt', args.timestamp)
             )
             .collect();
     },
 });
 
 /**
- * Bulk upsert notes (for initial sync or batch operations)
+ * Bulk upsert notes
  */
 export const bulkUpsertNotes = mutation({
     args: {
@@ -246,8 +217,8 @@ export const bulkUpsertNotes = mutation({
         for (const note of args.notes) {
             const existing = await ctx.db
                 .query('notes')
-                .withIndex('by_device_noteId', (q) =>
-                    q.eq('deviceId', note.deviceId).eq('noteId', note.noteId)
+                .withIndex('by_seed_noteId', (q) =>
+                    q.eq('seedId', note.seedId).eq('noteId', note.noteId)
                 )
                 .first();
 
@@ -256,10 +227,10 @@ export const bulkUpsertNotes = mutation({
                     await ctx.db.patch(existing._id, {
                         encryptedContent: note.encryptedContent,
                         encryptedTitle: note.encryptedTitle,
+                        encryptedFolder: note.encryptedFolder,
                         updatedAt: note.updatedAt,
                         deleted: note.deleted,
                         deletedAt: note.deletedAt,
-                        folder: note.folder,
                         metadata: note.metadata,
                     });
                 }
@@ -275,16 +246,16 @@ export const bulkUpsertNotes = mutation({
 });
 
 /**
- * Clear all notes for a device (for full sync reset)
+ * Clear all notes for a seed
  */
 export const clearAllNotes = mutation({
     args: {
-        deviceId: v.string(),
+        seedId: v.string(),
     },
     handler: async (ctx, args) => {
         const notes = await ctx.db
             .query('notes')
-            .withIndex('by_device', (q) => q.eq('deviceId', args.deviceId))
+            .withIndex('by_seed', (q) => q.eq('seedId', args.seedId))
             .collect();
 
         for (const note of notes) {
@@ -296,19 +267,18 @@ export const clearAllNotes = mutation({
 });
 
 /**
- * Cleanup old trash (30-day auto-delete)
- * This should be called periodically (e.g., via cron job)
+ * Cleanup old trash
  */
 export const cleanupOldTrash = mutation({
     args: {
-        deviceId: v.string(),
+        seedId: v.string(),
         olderThan: v.number(), // Timestamp threshold
     },
     handler: async (ctx, args) => {
         const oldTrash = await ctx.db
             .query('notes')
-            .withIndex('by_device_deleted', (q) =>
-                q.eq('deviceId', args.deviceId).eq('deleted', true)
+            .withIndex('by_seed_deleted', (q) =>
+                q.eq('seedId', args.seedId).eq('deleted', true)
             )
             .filter((q) =>
                 q.and(
