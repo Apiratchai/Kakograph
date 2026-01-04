@@ -82,8 +82,8 @@ export class IndexedDBProvider implements StorageProvider {
     async updateNote(id: string, updates: Partial<EncryptedNote>): Promise<void> {
         const db = getDB();
         await db.notes.update(id, {
+            updatedAt: Date.now(), // Default, can be overridden by ...updates
             ...updates,
-            updatedAt: Date.now(),
             synced: false,
         });
 

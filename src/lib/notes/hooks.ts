@@ -226,6 +226,10 @@ export function useNotes() {
 
             const [encryptedContent, encryptedTitle, encryptedFolder] = await Promise.all(promises);
 
+            // Monotonic Timestamp: Ensure new update is always physically "newer" than the previous version
+            // This prevents clock skew issues where local clock < remote clock causing sync to overwrite local changes.
+            const nextUpdatedAt = Math.max(now, (state.currentNote?.updatedAt || 0) + 1);
+
             const encryptedNote: EncryptedNote = {
                 id: state.currentNote?.id || createNoteId(),
                 seedId,
@@ -235,11 +239,9 @@ export function useNotes() {
                 // Preserve baseHash if we are updating (it shouldn't change until we sync)
                 baseHash: state.currentNote?.baseHash,
                 // Clear conflict data on save (Resolution strategy: Local Overwrite)
-                // If user resolves via UI, that specific function will handle merging.
-                // Standard save implies "I win".
                 conflictData: undefined,
                 timestamp: state.currentNote?.timestamp || now,
-                updatedAt: now,
+                updatedAt: nextUpdatedAt,
                 deleted: false,
                 synced: false,
                 metadata: {
@@ -262,13 +264,16 @@ export function useNotes() {
                 timestamp: encryptedNote.timestamp,
                 updatedAt: encryptedNote.updatedAt,
                 folder: folderName,
+                // Partial update doesn't have these, but safe to assume undefined for new note
+                baseHash: encryptedNote.baseHash,
+                conflictContent: undefined
             };
 
             setState((prev) => {
                 const existingIndex = prev.notes.findIndex((n) => n.id === decryptedNote.id);
                 // Optimistic update
                 const newNotes = existingIndex >= 0
-                    ? prev.notes.map((n, i) => i === existingIndex ? decryptedNote : n)
+                    ? prev.notes.map((n, i) => i === existingIndex ? { ...n, ...decryptedNote } : n)
                     : [decryptedNote, ...prev.notes];
 
                 // Re-sort
@@ -277,10 +282,11 @@ export function useNotes() {
                 return {
                     ...prev,
                     notes: newNotes,
-                    currentNote: decryptedNote,
+                    currentNote: { ...decryptedNote, conflictContent: undefined }, // Ensure conflict UI clears
                     isSaving: false,
                 };
             });
+
 
             // Refresh from DB to ensure consistency
             loadNotes(true);
@@ -376,9 +382,13 @@ export function useNotes() {
             // Get existing encrypted note to preserve fields
             const existing = await storage.getNote(id);
             if (existing) {
+                // Monotonic: Ensure deletion timestamp is newer than last update
+                const nextDeletedAt = Math.max(Date.now(), (existing.updatedAt || 0) + 1);
+
                 await storage.updateNote(id, {
                     deleted: true,
-                    deletedAt: Date.now(),
+                    deletedAt: nextDeletedAt,
+                    updatedAt: nextDeletedAt,
                 });
             }
 
@@ -403,9 +413,13 @@ export function useNotes() {
     // Restore a note
     const restoreNote = useCallback(async (id: string) => {
         try {
+            const existing = await storage.getNote(id);
+            const nextUpdatedAt = Math.max(Date.now(), (existing?.updatedAt || 0) + 1);
+
             await storage.updateNote(id, {
                 deleted: false,
-                deletedAt: undefined
+                deletedAt: undefined,
+                updatedAt: nextUpdatedAt // Force update timestamp to propagate change
             });
             loadNotes(true);
         } catch (err) {
@@ -683,6 +697,7 @@ export function useNotes() {
         permanentlyDeleteNote: hardDeleteWithSync,
         moveNote: moveNoteWithSync,
         updateNoteLocal,
-        clearAllNotes // NEW
+        clearAllNotes, // For full snapshot restore
+        wipeLocalData: clearAllNotes // Exposed for UI "Clear Local Data"
     };
 }
