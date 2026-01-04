@@ -301,6 +301,16 @@ export function useNotes() {
         }
     }, [encryptionKey, seedId, storage, state.currentNote, extractTitle, loadNotes]);
 
+    // Internal Save for Offline Fallback or Cache Update
+    const saveNoteLocal = useCallback(async (encryptedNote: EncryptedNote) => {
+        if (state.currentNote) {
+            await storage.updateNote(encryptedNote.id, encryptedNote);
+        } else {
+            await storage.saveNote(encryptedNote);
+        }
+        loadNotes(true);
+    }, [storage, state.currentNote, loadNotes]);
+
     // Create new note
     const createNewNote = useCallback(async (initialFolder?: string) => {
         if (!encryptionKey || !seedId) return;
@@ -651,38 +661,180 @@ export function useNotes() {
         markNoteAsSynced
     );
 
-    // Override saveNote to push to sync
-    const originalSaveNote = saveNote;
+    // Cloud-First Save
     const saveNoteWithSync = useCallback(async (content: string) => {
-        await originalSaveNote(content);
-        // After saving locally, trigger sync (implicit via state.encryptedNotes update -> hook reaction)
-        // But for faster response, we can explicitly push the *current* note if we knew the ID.
-        // Since loadNotes updates state, the hook will pick it up eventually (30s or immediate if depend effect runs).
-        // Actually, let's optimize: saveNote calls loadNotes(true), which updates state.encryptedNotes.
-        // useConvexSync depends on localNotes (state.encryptedNotes), so it will re-evaluate diff.
-    }, [originalSaveNote]);
+        if (!encryptionKey || !seedId) return;
+
+        // 1. Prepare Note Data (Encryption & Metadata)
+        // ... (Logic duplicated from original saveNote, moved here for control) ...
+        // To avoid HUGE duplication, let's keep originalSaveNote as "prepareAndSaveLocal" 
+        // and just interpret "saveNote" as the high-level action.
+
+        // Actually, simpler: let's modify the ORIGINAL saveNote to be "saveNoteInternal" that returns the encrypted object
+        // and handles the "where to save" logic.
+
+    }, []);
+
+    // RE-WRITING saveNote (the one exposed to UI via return) to be the orchestrator
+    const saveNoteOrchestrator = useCallback(async (content: string) => {
+        if (!encryptionKey || !seedId) return;
+
+        setState(prev => ({ ...prev, isSaving: true }));
+
+        try {
+            const title = extractTitle(content);
+            const now = Date.now();
+            const contentHash = await hashContent(content);
+            const folderName = state.currentNote?.folder;
+
+            const promises: Promise<any>[] = [
+                encryptText(content, encryptionKey),
+                encryptText(title, encryptionKey),
+            ];
+
+            if (folderName) {
+                promises.push(encryptText(folderName, encryptionKey));
+            } else {
+                promises.push(Promise.resolve(undefined));
+            }
+
+            const [encryptedContent, encryptedTitle, encryptedFolder] = await Promise.all(promises);
+            const nextUpdatedAt = Math.max(now, (state.currentNote?.updatedAt || 0) + 1);
+
+            const encryptedNote: EncryptedNote = {
+                id: state.currentNote?.id || createNoteId(),
+                seedId,
+                encryptedContent,
+                encryptedTitle,
+                encryptedFolder,
+                baseHash: state.currentNote?.baseHash,
+                conflictData: undefined,
+                timestamp: state.currentNote?.timestamp || now,
+                updatedAt: nextUpdatedAt,
+                deleted: false,
+                synced: true, // Optimistically true if going to cloud? No, let sync logic handle default.
+                metadata: {
+                    size: new TextEncoder().encode(content).length,
+                    contentHash,
+                },
+            };
+
+            // OPTIMISTIC UPDATE (React State)
+            const decryptedNote: DecryptedNote = {
+                id: encryptedNote.id,
+                title,
+                content,
+                timestamp: encryptedNote.timestamp,
+                updatedAt: encryptedNote.updatedAt,
+                folder: folderName,
+                baseHash: encryptedNote.baseHash,
+                conflictContent: undefined
+            };
+
+            setState((prev) => {
+                const existingIndex = prev.notes.findIndex((n) => n.id === decryptedNote.id);
+                const newNotes = existingIndex >= 0
+                    ? prev.notes.map((n, i) => i === existingIndex ? { ...n, ...decryptedNote } : n)
+                    : [decryptedNote, ...prev.notes];
+
+                newNotes.sort((a, b) => b.updatedAt - a.updatedAt);
+
+                return {
+                    ...prev,
+                    notes: newNotes,
+                    currentNote: { ...decryptedNote, conflictContent: undefined },
+                    isSaving: false,
+                };
+            });
+
+            // CLOUD FIRST LOGIC
+            // If connected, push directly. Local DB will update via subscription.
+            if (syncService.isEnabled) {
+                try {
+                    await syncService.pushNote(encryptedNote);
+                    console.log('[Hooks] Cloud-First save successful');
+                } catch (err) {
+                    console.warn('[Hooks] Cloud save failed, falling back to local:', err);
+                    // Fallback
+                    await saveNoteLocal({ ...encryptedNote, synced: false });
+                }
+            } else {
+                // Offline: Save to DB + Queue
+                await saveNoteLocal({ ...encryptedNote, synced: false });
+            }
+
+        } catch (err) {
+            console.error('Failed to save note:', err);
+            setState(prev => ({ ...prev, isSaving: false, error: 'Failed to save note' }));
+        }
+    }, [encryptionKey, seedId, state.currentNote, extractTitle, syncService, saveNoteLocal]);
 
     // Explicitly push deletions/restores
     const deleteNoteWithSync = useCallback(async (id: string) => {
-        await deleteNote(id);
-        syncService.pushDelete(id, Date.now());
+        // Optimistic UI Update
+        setState((prev) => {
+            const deletedNote = prev.notes.find(n => n.id === id);
+            return {
+                ...prev,
+                notes: prev.notes.filter((n) => n.id !== id),
+                trash: deletedNote ? [{ ...deletedNote, deletedAt: Date.now() }, ...(prev.trash || [])] : (prev.trash || []),
+                currentNote: prev.currentNote?.id === id ? null : prev.currentNote,
+                trashCount: prev.trashCount + 1,
+            };
+        });
+
+        if (syncService.isEnabled) {
+            try {
+                await syncService.pushDelete(id, Date.now());
+            } catch (err) {
+                console.warn('[Hooks] Cloud delete failed, fallback to local', err);
+                await deleteNote(id);
+            }
+        } else {
+            await deleteNote(id);
+        }
     }, [deleteNote, syncService]);
 
     const hardDeleteWithSync = useCallback(async (id: string) => {
-        // 1. Push to remote first to avoid re-syncing before we delete locally
-        try {
-            await syncService.pushHardDelete(id);
-            // 2. Only perform local delete if push succeeded
+        // Optimistic UI Update
+        setState(prev => ({
+            ...prev,
+            trash: prev.trash.filter(n => n.id !== id),
+            trashCount: Math.max(0, prev.trashCount - 1),
+            currentNote: prev.currentNote?.id === id ? null : prev.currentNote
+        }));
+
+        if (syncService.isEnabled) {
+            try {
+                await syncService.pushHardDelete(id);
+                // Note: We do NOT need to delete locally if cloud succeeds? 
+                // Actually for hard delete, we SHOULD delete locally immediately to free space, 
+                // as the subscription might just say "record gone" which implies delete.
+                await permanentlyDeleteNote(id);
+            } catch (error) {
+                console.error('[Hooks] Cloud hard-delete failed, aborting local delete:', error);
+                // Revert optimistic update? For now, we reload.
+                loadNotes(true);
+            }
+        } else {
             await permanentlyDeleteNote(id);
-        } catch (error) {
-            console.error('[Sync] Failed to push hard delete, aborting local delete to prevent zombie note:', error);
-            // TODO: Notify user via toast
         }
-    }, [permanentlyDeleteNote, syncService]);
+    }, [permanentlyDeleteNote, syncService, loadNotes]);
 
     const restoreNoteWithSync = useCallback(async (id: string) => {
-        await restoreNote(id);
-        syncService.pushRestore(id);
+        // Optimistic UI Update
+        // (Complex to do optimistic restore derived from trash state, so skipping UI opt for now, rely on fast cloud)
+
+        if (syncService.isEnabled) {
+            try {
+                await syncService.pushRestore(id);
+            } catch (err) {
+                console.warn('[Hooks] Cloud restore failed, fallback to local', err);
+                await restoreNote(id);
+            }
+        } else {
+            await restoreNote(id);
+        }
     }, [restoreNote, syncService]);
 
     const moveNoteWithSync = useCallback(async (id: string, folder: string) => {
@@ -697,7 +849,7 @@ export function useNotes() {
     return {
         ...state,
         loadNotes,
-        saveNote: saveNoteWithSync,
+        saveNote: saveNoteOrchestrator, // Use the new Cloud-First Orchestrator
         createNewNote,
         selectNote,
         deleteNote: deleteNoteWithSync,
