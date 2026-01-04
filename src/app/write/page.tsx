@@ -109,7 +109,8 @@ export default function WritePage() {
         restoreNotes,
         permanentlyDeleteNote,
         trashCount,
-        clearAllNotes // For full snapshot restore
+        clearAllNotes, // For full snapshot restore
+        wipeLocalData
     } = useNotes();
 
     const [content, setContent] = useState('');
@@ -1288,6 +1289,31 @@ export default function WritePage() {
                                             )}
                                             <span>Sync Settings</span>
                                         </div>
+                                    </button>
+
+                                    <div className="h-px my-1" style={{ backgroundColor: 'var(--border-secondary)' }} />
+
+                                    {/* Danger Zone */}
+                                    <button
+                                        onClick={(e) => {
+                                            e.stopPropagation();
+                                            showConfirm(
+                                                'Clear Local Data?',
+                                                'This will wipe all notes from this device and re-download them from the cloud. This solves sync issues. Your cloud data is safe.',
+                                                async () => {
+                                                    await wipeLocalData();
+                                                    setShowSettingsMenu(false);
+                                                    alert('Local data cleared. Resyncing...');
+                                                },
+                                                true // isDestructive
+                                            );
+                                        }}
+                                        className="w-full px-4 py-2 text-left text-sm flex items-center gap-3 transition-colors text-red-400 hover:bg-red-500/10"
+                                        onMouseEnter={e => e.currentTarget.style.backgroundColor = 'rgba(239, 68, 68, 0.1)'}
+                                        onMouseLeave={e => e.currentTarget.style.backgroundColor = 'transparent'}
+                                    >
+                                        <Trash2 size={16} />
+                                        <span>Clear Local Data</span>
                                     </button>
                                 </div>
                             )}

@@ -159,7 +159,22 @@ export class IndexedDBProvider implements StorageProvider {
     // Clear all notes for a specific seedId (used for full snapshot restore / full reset)
     async clearAllNotesForSeed(seedId: string): Promise<void> {
         const db = getDB();
-        await db.notes.where('seedId').equals(seedId).delete();
+
+        await db.transaction('rw', db.notes, db.syncQueue, async () => {
+            // 1. Find all notes belonging to this seed
+            const notes = await db.notes.where('seedId').equals(seedId).toArray();
+            const noteIds = notes.map(n => n.id);
+
+            // 2. Delete the notes
+            await db.notes.where('seedId').equals(seedId).delete();
+
+            // 3. CRITICAL: Clear any pending sync operations for these notes
+            // so we don't accidentally push "deletes" or "updates" after we wipe them.
+            // Since syncQueue items just have 'noteId', we use the IDs we gathered.
+            if (noteIds.length > 0) {
+                await db.syncQueue.where('noteId').anyOf(noteIds).delete();
+            }
+        });
     }
 
     async bulkDelete(ids: string[]): Promise<void> {
