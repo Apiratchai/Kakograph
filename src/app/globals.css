@@ -51,6 +51,7 @@
   --text-secondary: #94a3b8;
   --text-muted: #64748b;
   --text-disabled: #475569;
+  --text-destructive: #f87171; /* Warning/Critical */
   --text-inverse: #0f172a;
   
   /* ----------------------------------------
@@ -186,6 +187,7 @@ html.light {
   --text-secondary: #475569;
   --text-muted: #64748b;
   --text-disabled: #94a3b8;
+  --text-destructive: #dc2626; /* Warning/Critical */
   --text-inverse: #f1f5f9;
   
   /* ----------------------------------------
@@ -325,6 +327,12 @@ body {
 :focus-visible {
   outline: 2px solid hsl(var(--ring));
   outline-offset: 2px;
+}
+
+/* Allow custom focus styles on inputs */
+input:focus-visible,
+textarea:focus-visible {
+  outline: none;
 }
 
 /* Scrollbar */

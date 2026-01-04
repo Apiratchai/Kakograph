@@ -87,6 +87,8 @@ export default function WritePage() {
     const fileInputRef = useRef<HTMLInputElement>(null);
 
     const [viewMode, setViewMode] = useState<'editor' | 'graph'>('editor');
+    const [showTrashConfirm, setShowTrashConfirm] = useState(false);
+    const [trashConfirmInput, setTrashConfirmInput] = useState('');
 
     const {
         notes,
@@ -428,6 +430,19 @@ export default function WritePage() {
         a.click();
         document.body.removeChild(a);
         URL.revokeObjectURL(url);
+    };
+
+    // Empty Trash
+    const handleEmptyTrash = async () => {
+        if (trashConfirmInput !== 'delete forever') return;
+
+        // Disable UI/show loading could be good here but we'll keep it simple
+        const promises = trash.map(note => permanentlyDeleteNote(note.id));
+        await Promise.all(promises);
+
+        setShowTrashConfirm(false);
+        setTrashConfirmInput('');
+        showAlert('Trash Empty', 'All items permanently deleted.');
     };
 
     // Import Notes
@@ -956,22 +971,32 @@ export default function WritePage() {
                 {/* Sidebar Footer: Trash + Actions */}
                 <div className="border-t border-border/50 bg-surface/50">
                     {/* Trash Section */}
-                    <div className="px-1 border-b border-slate-800/30">
-                        <div
-                            className="flex items-center gap-2 px-3 py-3 text-red-400/90 hover:text-red-300 cursor-pointer transition-colors"
-                            onClick={() => toggleFolder('TRASH_BIN')}
-                        >
-                            <div className={`transform transition-transform duration-200 ${expandedFolders.has('TRASH_BIN') ? 'rotate-90' : ''}`}>
-                                <ChevronRight size={14} />
-                            </div>
-                            <div className="flex items-center gap-2 flex-1">
+                    <div className="px-1 border-b border-border/30">
+                        <div className="flex items-center justify-between px-3 py-3">
+                            <div
+                                className="flex items-center gap-2 cursor-pointer flex-1 text-[var(--text-destructive)] hover:opacity-80 transition-opacity"
+                                onClick={() => toggleFolder('TRASH_BIN')}
+                            >
+                                <div className={`transform transition-transform duration-200 ${expandedFolders.has('TRASH_BIN') ? 'rotate-90' : ''}`}>
+                                    <ChevronRight size={14} />
+                                </div>
                                 <span className="text-xs font-bold uppercase tracking-wider">Trash Bin</span>
-                                <span className="text-[10px] bg-slate-800 text-slate-400 px-1.5 py-0.5 rounded-full">{trashCount}</span>
+                                <span className="text-[10px] bg-[var(--surface-tertiary)] text-[var(--text-muted)] px-1.5 py-0.5 rounded-full">{trashCount}</span>
                             </div>
+                            {trashCount > 0 && (
+                                <button
+                                    onClick={(e) => { e.stopPropagation(); setShowTrashConfirm(true); }}
+                                    className="p-1.5 rounded transition-colors text-[var(--text-destructive)] hover:bg-red-500/10"
+                                    title="Empty Trash"
+                                >
+                                    <Trash2 size={14} />
+                                </button>
+                            )}
                         </div>
 
                         {expandedFolders.has('TRASH_BIN') && (
                             <div className="pl-2 pr-2 pb-4 max-h-60 overflow-y-auto">
+
                                 {trash.length === 0 ? (
                                     <div className="px-4 py-2 text-xs text-slate-600 italic select-none">Trash is empty</div>
                                 ) : (
@@ -1320,6 +1345,54 @@ export default function WritePage() {
                 onConfirm={modalConfig.onConfirm}
                 isDestructive={modalConfig.isDestructive}
             />
+
+            <Modal
+                isOpen={showTrashConfirm}
+                onClose={() => setShowTrashConfirm(false)}
+                title="Empty Trash?"
+                type="custom"
+                footer={
+                    <div className="flex justify-end gap-2 mt-4">
+                        <button
+                            onClick={() => setShowTrashConfirm(false)}
+                            className="px-4 py-2 text-sm font-medium rounded-lg transition-colors hover:bg-[var(--hover-bg)] text-[var(--text-secondary)]"
+                        >
+                            Cancel
+                        </button>
+                        <button
+                            onClick={handleEmptyTrash}
+                            disabled={trashConfirmInput !== 'delete forever'}
+                            className={`px-4 py-2 text-sm font-medium text-white rounded-lg transition-colors ${trashConfirmInput === 'delete forever'
+                                ? 'bg-red-600 hover:bg-red-700'
+                                : 'bg-red-500/50 cursor-not-allowed'
+                                }`}
+                        >
+                            Permanently Delete All
+                        </button>
+                    </div>
+                }
+            >
+                <div className="space-y-4">
+                    <div className="bg-red-500/10 border border-red-500/20 rounded-lg p-3">
+                        <p className="text-sm text-red-600 dark:text-red-400">
+                            Warning: You are about to permanently delete <b>{trash.length}</b> items. This cannot be undone.
+                        </p>
+                    </div>
+                    <div>
+                        <label className="block text-sm text-[var(--text-secondary)] mb-2">
+                            To confirm, type <span className="font-bold select-all text-[var(--text-primary)]">delete forever</span> below:
+                        </label>
+                        <input
+                            type="text"
+                            value={trashConfirmInput}
+                            onChange={(e) => setTrashConfirmInput(e.target.value)}
+                            className="w-full bg-[var(--surface-secondary)] border border-[var(--border-primary)] text-[var(--text-primary)] rounded-lg p-2 focus:border-red-500 !focus:ring-0 !focus:outline-none transition-colors outline-none"
+                            placeholder="delete forever"
+                            autoFocus
+                        />
+                    </div>
+                </div>
+            </Modal>
         </div >
     );
 }

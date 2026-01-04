@@ -12,7 +12,7 @@ import CodeBlockLowlight from '@tiptap/extension-code-block-lowlight';
 import TaskList from '@tiptap/extension-task-list';
 import TaskItem from '@tiptap/extension-task-item';
 import Link from '@tiptap/extension-link';
-import Image from '@tiptap/extension-image';
+import { ResizableImage } from './resizable-image';
 import Typography from '@tiptap/extension-typography';
 import { common, createLowlight } from 'lowlight';
 import Mention from '@tiptap/extension-mention';
@@ -64,7 +64,12 @@ import {
     AlignRight,
     Subscript as SubIcon,
     Superscript as SuperIcon,
-    Eraser
+    Eraser,
+    Plus,
+    Trash2,
+    RowsIcon,
+    Columns,
+    X
 } from 'lucide-react';
 import './rich-editor.css';
 
@@ -129,6 +134,14 @@ export function RichEditor({
 }: RichEditorProps) {
     const [isSaving, setIsSaving] = useState(false);
     const isProgrammaticUpdate = useRef(false);
+    const colorInputRef = useRef<HTMLInputElement>(null);
+    const highlightInputRef = useRef<HTMLInputElement>(null);
+
+    // Link modal state
+    const [showLinkModal, setShowLinkModal] = useState(false);
+    const [linkUrl, setLinkUrl] = useState('');
+    const [linkText, setLinkText] = useState('');
+    const [needsLinkText, setNeedsLinkText] = useState(false);
 
     // Track notes in ref to access inside suggestion (closure) without re-init editor
     const notesRef = useRef(notes);
@@ -192,12 +205,7 @@ export function RichEditor({
                     class: 'editor-link',
                 },
             }),
-            Image.configure({
-                allowBase64: true,
-                HTMLAttributes: {
-                    class: 'editor-image',
-                },
-            }),
+            ResizableImage,
             Typography,
             KeyMapOverride,
         ],
@@ -293,23 +301,41 @@ export function RichEditor({
         const file = e.target.files?.[0];
         if (file && editor) {
             compressImage(file).then(base64 => {
-                editor.chain().focus().setImage({ src: base64 }).run();
+                editor.chain().focus().insertContent({
+                    type: 'image',
+                    attrs: { src: base64 }
+                }).run();
             }).catch(console.error);
         }
         if (e.target) e.target.value = '';
     };
 
-    const setLink = useCallback(() => {
+    const openLinkModal = useCallback(() => {
         if (!editor) return;
-        const previousUrl = editor.getAttributes('link').href;
-        const url = window.prompt('URL', previousUrl);
-        if (url === null) return;
-        if (url === '') {
-            editor.chain().focus().extendMarkRange('link').unsetLink().run();
-            return;
-        }
-        editor.chain().focus().extendMarkRange('link').setLink({ href: url }).run();
+        const previousUrl = editor.getAttributes('link').href || '';
+        const { from, to } = editor.state.selection;
+        setLinkUrl(previousUrl || 'https://');
+        setLinkText('');
+        setNeedsLinkText(from === to);
+        setShowLinkModal(true);
     }, [editor]);
+
+    const handleLinkSubmit = useCallback(() => {
+        if (!editor) return;
+        if (!linkUrl || linkUrl === 'https://') {
+            // Remove link if URL is empty
+            editor.chain().focus().extendMarkRange('link').unsetLink().run();
+        } else if (needsLinkText && linkText) {
+            // Insert new link with text
+            editor.chain().focus().insertContent(`<a href="${linkUrl}">${linkText}</a>`).run();
+        } else if (!needsLinkText) {
+            // Apply link to selected text
+            editor.chain().focus().extendMarkRange('link').setLink({ href: linkUrl }).run();
+        }
+        setShowLinkModal(false);
+        setLinkUrl('');
+        setLinkText('');
+    }, [editor, linkUrl, linkText, needsLinkText]);
 
     const indent = useCallback(() => {
         if (!editor) return;
@@ -472,21 +498,45 @@ export function RichEditor({
                     <div className="toolbar-separator" />
 
                     <div className="toolbar-group">
+                        <input
+                            ref={colorInputRef}
+                            type="color"
+                            className="hidden"
+                            onChange={(e) => editor.chain().focus().setColor(e.target.value).run()}
+                        />
                         <button
-                            onClick={() => {
-                                const color = window.prompt('Color (hex, name)', '#3b82f6');
-                                if (color) editor.chain().focus().setColor(color).run();
-                            }}
+                            onClick={() => colorInputRef.current?.click()}
                             title="Text Color"
                         >
                             <Palette size={16} />
                         </button>
                         <button
-                            onClick={() => editor.chain().focus().toggleHighlight().run()}
+                            onClick={() => editor.chain().focus().unsetColor().run()}
+                            title="Clear Text Color"
+                            className="text-xs"
+                        >
+                            <X size={12} />
+                        </button>
+                        <input
+                            ref={highlightInputRef}
+                            type="color"
+                            defaultValue="#fef08a"
+                            className="hidden"
+                            onChange={(e) => editor.chain().focus().toggleHighlight({ color: e.target.value }).run()}
+                        />
+                        <button
+                            onClick={() => highlightInputRef.current?.click()}
                             className={editor.isActive('highlight') ? 'is-active' : ''}
                             title="Highlight"
                         >
                             <Highlighter size={16} />
+                        </button>
+                        <button
+                            onClick={() => editor.chain().focus().unsetHighlight().run()}
+                            title="Clear Highlight"
+                            className="text-xs"
+                        >
+                            <X size={12} />
                         </button>
                     </div>
 
@@ -499,8 +549,41 @@ export function RichEditor({
                         >
                             <TableIcon size={16} />
                         </button>
+                        {editor.isActive('table') && (
+                            <>
+                                <button
+                                    onClick={() => editor.chain().focus().addRowAfter().run()}
+                                    title="Add Row Below"
+                                >
+                                    <Plus size={14} /><RowsIcon size={14} />
+                                </button>
+                                <button
+                                    onClick={() => editor.chain().focus().deleteRow().run()}
+                                    title="Delete Row"
+                                >
+                                    <Trash2 size={14} /><RowsIcon size={14} />
+                                </button>
+                                <button
+                                    onClick={() => editor.chain().focus().addColumnAfter().run()}
+                                    title="Add Column Right"
+                                >
+                                    <Plus size={14} /><Columns size={14} />
+                                </button>
+                                <button
+                                    onClick={() => editor.chain().focus().deleteColumn().run()}
+                                    title="Delete Column"
+                                >
+                                    <Trash2 size={14} /><Columns size={14} />
+                                </button>
+                            </>
+                        )}
+                    </div>
+
+                    <div className="toolbar-separator" />
+
+                    <div className="toolbar-group">
                         <button
-                            onClick={setLink}
+                            onClick={openLinkModal}
                             className={editor.isActive('link') ? 'is-active' : ''}
                             title="Add Link"
                         >
@@ -540,6 +623,58 @@ export function RichEditor({
 
             {isSaving && (
                 <div className="save-indicator">Saving...</div>
+            )}
+
+            {/* Link Modal */}
+            {showLinkModal && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50" onClick={() => setShowLinkModal(false)}>
+                    <div
+                        className="bg-[var(--surface-elevated)] rounded-lg shadow-xl p-6 w-full max-w-md mx-4"
+                        onClick={(e) => e.stopPropagation()}
+                    >
+                        <h3 className="text-lg font-semibold text-[var(--text-primary)] mb-4">Insert Link</h3>
+                        <div className="space-y-4">
+                            <div>
+                                <label className="block text-sm text-[var(--text-secondary)] mb-1">URL</label>
+                                <input
+                                    type="url"
+                                    value={linkUrl}
+                                    onChange={(e) => setLinkUrl(e.target.value)}
+                                    placeholder="https://example.com"
+                                    className="w-full bg-[var(--surface-secondary)] border border-[var(--border-primary)] text-[var(--text-primary)] rounded-lg p-2 focus:border-[var(--accent-blue)] outline-none"
+                                    autoFocus
+                                />
+                            </div>
+                            {needsLinkText && (
+                                <div>
+                                    <label className="block text-sm text-[var(--text-secondary)] mb-1">Link Text</label>
+                                    <input
+                                        type="text"
+                                        value={linkText}
+                                        onChange={(e) => setLinkText(e.target.value)}
+                                        placeholder="Click here"
+                                        className="w-full bg-[var(--surface-secondary)] border border-[var(--border-primary)] text-[var(--text-primary)] rounded-lg p-2 focus:border-[var(--accent-blue)] outline-none"
+                                    />
+                                </div>
+                            )}
+                        </div>
+                        <div className="flex justify-end gap-2 mt-6">
+                            <button
+                                onClick={() => setShowLinkModal(false)}
+                                className="px-4 py-2 text-sm font-medium rounded-lg transition-colors hover:bg-[var(--hover-bg)] text-[var(--text-secondary)]"
+                            >
+                                Cancel
+                            </button>
+                            <button
+                                onClick={handleLinkSubmit}
+                                disabled={!linkUrl || (needsLinkText && !linkText)}
+                                className="px-4 py-2 text-sm font-medium text-white rounded-lg transition-colors bg-[var(--accent-blue)] hover:bg-[var(--accent-blue-hover)] disabled:opacity-50 disabled:cursor-not-allowed"
+                            >
+                                Insert Link
+                            </button>
+                        </div>
+                    </div>
+                </div>
             )}
         </div>
     );

@@ -221,7 +221,7 @@ export default function NoteGraph({ notes, onNodeClick, onNodeHover, highlighted
 
             // Gravity (Obsidian-like) - Pull everything gently to center
             // This prevents "flying away" and keeps the graph compact
-            graph.d3Force('gravity', forceRadial(0, 0, 0).strength(0.08));
+            graph.d3Force('gravity', forceRadial(0, 0, 0).strength(0.15));
 
             // Center of Mass - Hard constraint to keep viewport centered
             graph.d3Force('center').x(0).y(0);
@@ -349,6 +349,10 @@ export default function NoteGraph({ notes, onNodeClick, onNodeHover, highlighted
                 linkWidth={(link: any) => highlightLinks.has(link) ? 2 : 1}
                 onNodeClick={(node: any) => onNodeClick(node.id)}
                 onNodeHover={handleNodeHover}
+                onNodeDragEnd={(node: any) => {
+                    node.fx = null;
+                    node.fy = null;
+                }}
                 warmupTicks={100} // Pre-calculate 100 ticks of physics before rendering
                 onEngineStop={() => {
                     isInitialLoad.current = false;
