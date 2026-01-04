@@ -311,7 +311,34 @@ export function useNotes() {
         loadNotes(true);
     }, [storage, state.currentNote, loadNotes]);
 
-    // Create new note
+    // -- Sync System --
+    const handleRemoteUpdate = useCallback(async (incomingNotes: EncryptedNote[]) => {
+        if (!encryptionKey) return;
+        try {
+            await storage.bulkSave(incomingNotes);
+            await loadNotes(true);
+        } catch (err) {
+            console.error('Failed to apply remote updates:', err);
+        }
+    }, [storage, encryptionKey, loadNotes]);
+
+    const markNoteAsSynced = useCallback(async (ids: string[]) => {
+        try {
+            for (const id of ids) await storage.markAsSynced(id);
+            loadNotes(true);
+        } catch (err) {
+            console.error('Failed to mark notes as synced:', err);
+        }
+    }, [storage, loadNotes]);
+
+    const syncService = useConvexSync(
+        seedId,
+        state.encryptedNotes,
+        handleRemoteUpdate,
+        markNoteAsSynced
+    );
+
+    // -- Note Operations --
     const createNewNote = useCallback(async (initialFolder?: string) => {
         if (!encryptionKey || !seedId) return;
 
@@ -369,11 +396,20 @@ export function useNotes() {
             }));
 
             // Refresh from DB
-            loadNotes(true);
+            await loadNotes(true);
+
+            // Proactively push initial note to cloud if online
+            if (syncService.isEnabled) {
+                try {
+                    await syncService.pushNote(encryptedNote);
+                } catch (err) {
+                    console.warn('[Hooks] Initial note push delayed, background sync will retry', err);
+                }
+            }
         } catch (err) {
             console.error('Failed to create new note:', err);
         }
-    }, [encryptionKey, seedId, storage, loadNotes]);
+    }, [encryptionKey, seedId, storage, loadNotes, syncService]);
 
     // Select a note
     const selectNote = useCallback((id: string) => {
@@ -564,6 +600,7 @@ export function useNotes() {
 
     // Bulk delete notes (Soft Delete)
     const deleteNotes = useCallback(async (ids: string[]) => {
+        const now = Date.now();
         try {
             // Update DB
             await Promise.all(ids.map(id =>
@@ -592,12 +629,24 @@ export function useNotes() {
                 };
             });
 
-            loadNotes(true);
+            // Refresh local state
+            await loadNotes(true);
+
+            // Proactively push to cloud if online
+            if (syncService.isEnabled) {
+                const updatedNotes = await storage.getNotesAfterTimestamp(now - 1000);
+                const targetNotes = updatedNotes.filter(n => ids.includes(n.id));
+                if (targetNotes.length > 0) {
+                    await syncService.pushAllUnsynced(targetNotes);
+                }
+            }
         } catch (err) {
             console.error('Failed to bulk delete notes:', err);
         }
-    }, [storage, loadNotes]);
+    }, [storage, loadNotes, syncService]);
 
+
+    // -- Note Operations --
     // Bulk restoration
     const restoreNotes = useCallback(async (ids: string[]) => {
         try {
@@ -630,38 +679,6 @@ export function useNotes() {
         }
     }, [storage, seedId]);
 
-    // Handle remote updates from Convex
-    const handleRemoteUpdate = useCallback(async (incomingNotes: EncryptedNote[]) => {
-        if (!encryptionKey) return;
-
-        try {
-            await storage.bulkSave(incomingNotes);
-            await loadNotes(true);
-        } catch (err) {
-            console.error('Failed to apply remote updates:', err);
-        }
-    }, [storage, encryptionKey, loadNotes]);
-
-    // Callback to mark notes as synced after successful push
-    const markNoteAsSynced = useCallback(async (ids: string[]) => {
-        try {
-            for (const id of ids) {
-                await storage.markAsSynced(id);
-            }
-            // Silent reload to update 'synced' status in memory
-            loadNotes(true);
-        } catch (err) {
-            console.error('Failed to mark notes as synced:', err);
-        }
-    }, [storage, loadNotes]);
-
-    // Initialize Sync Service (Moved UP to be available for functions)
-    const syncService = useConvexSync(
-        seedId,
-        state.encryptedNotes,
-        handleRemoteUpdate,
-        markNoteAsSynced
-    );
 
     // Override saveNote to push to sync
     // ... we already refactored saveNote below, but let's keep the flow.
@@ -719,7 +736,7 @@ export function useNotes() {
                 timestamp: state.currentNote?.timestamp || now,
                 updatedAt: nextUpdatedAt,
                 deleted: false,
-                synced: true, // Optimistically true if going to cloud? No, let sync logic handle default.
+                synced: false, // Must be false until background sync confirms it
                 metadata: {
                     size: new TextEncoder().encode(content).length,
                     contentHash,
@@ -754,22 +771,18 @@ export function useNotes() {
                 };
             });
 
-            // CLOUD FIRST LOGIC
-            // If connected, push directly. Local DB will update via subscription.
+            // 1. ALWAYS save locally first to prevent "Bounce Back" on loadNotes
+            await saveNoteLocal({ ...encryptedNote, synced: false });
+
+            // 2. Then push/sync with Cloud if enabled
             if (syncService.isEnabled) {
                 try {
                     await syncService.pushNote(encryptedNote);
-                    console.log('[Hooks] Cloud-First save successful');
+                    console.log('[Hooks] Cloud sync successful');
                 } catch (err) {
-                    console.warn('[Hooks] Cloud save failed, falling back to local:', err);
-                    // Fallback
-                    await saveNoteLocal({ ...encryptedNote, synced: false });
+                    console.warn('[Hooks] Cloud push delayed, will retry in background:', err);
                 }
-            } else {
-                // Offline: Save to DB + Queue
-                await saveNoteLocal({ ...encryptedNote, synced: false });
             }
-
         } catch (err) {
             console.error('Failed to save note:', err);
             setState(prev => ({ ...prev, isSaving: false, error: 'Failed to save note' }));
@@ -790,15 +803,16 @@ export function useNotes() {
             };
         });
 
+        // 1. ALWAYS update local storage first to prevent "Bounce Back" on loadNotes
+        await deleteNote(id);
+
         if (syncService.isEnabled) {
             try {
+                // 2. Then push to cloud
                 await syncService.pushDelete(id, Date.now());
             } catch (err) {
-                console.warn('[Hooks] Cloud delete failed, fallback to local', err);
-                await deleteNote(id);
+                console.warn('[Hooks] Cloud delete delayed, background sync will retry', err);
             }
-        } else {
-            await deleteNote(id);
         }
     }, [deleteNote, syncService]);
 
@@ -811,22 +825,18 @@ export function useNotes() {
             currentNote: prev.currentNote?.id === id ? null : prev.currentNote
         }));
 
+        // 1. Local Hard Delete
+        await permanentlyDeleteNote(id);
+
         if (syncService.isEnabled) {
             try {
+                // 2. Cloud Hard Delete (Registers pending delete to prevent zombie revival)
                 await syncService.pushHardDelete(id);
-                // Note: We do NOT need to delete locally if cloud succeeds? 
-                // Actually for hard delete, we SHOULD delete locally immediately to free space, 
-                // as the subscription might just say "record gone" which implies delete.
-                await permanentlyDeleteNote(id);
             } catch (error) {
-                console.error('[Hooks] Cloud hard-delete failed, aborting local delete:', error);
-                // Revert optimistic update? For now, we reload.
-                loadNotes(true);
+                console.error('[Hooks] Cloud hard-delete delayed:', error);
             }
-        } else {
-            await permanentlyDeleteNote(id);
         }
-    }, [permanentlyDeleteNote, syncService, loadNotes]);
+    }, [permanentlyDeleteNote, syncService]);
 
     // Bulk Permanently Delete (Cloud-First)
     const permanentlyDeleteNotes = useCallback(async (ids: string[]) => {
@@ -838,22 +848,16 @@ export function useNotes() {
             currentNote: ids.includes(prev.currentNote?.id || '') ? null : prev.currentNote
         }));
 
+        // 1. Local Bulk Hard Delete
+        await Promise.all(ids.map(id => storage.hardDeleteNote(id)));
+
         if (syncService.isEnabled) {
             try {
-                // 1. Push Bulk Hard Delete (Registers pending deletes to prevent zombie re-download)
+                // 2. Cloud Bulk Hard Delete
                 await syncService.pushBulkHardDelete(ids);
-                // 2. Perform local delete
-                // We do this AFTER push starts (or ideally parallel with optimistic UI) 
-                // but since we added to pending list in sync service, fullSync won't catch it. 
-                await Promise.all(ids.map(id => storage.hardDeleteNote(id)));
             } catch (error) {
-                console.error('[Hooks] Cloud bulk hard-delete failed, aborting local delete:', error);
-                // Revert or reload
-                loadNotes(true);
+                console.error('[Hooks] Cloud bulk delete delayed:', error);
             }
-        } else {
-            // Offline: Just delete locally.
-            await Promise.all(ids.map(id => storage.hardDeleteNote(id)));
         }
 
         // Refresh to ensure consistency
@@ -864,15 +868,16 @@ export function useNotes() {
         // Optimistic UI Update
         // (Complex to do optimistic restore derived from trash state, so skipping UI opt for now, rely on fast cloud)
 
+        // 1. Local Restore
+        await restoreNote(id);
+
         if (syncService.isEnabled) {
             try {
+                // 2. Cloud Restore
                 await syncService.pushRestore(id);
             } catch (err) {
-                console.warn('[Hooks] Cloud restore failed, fallback to local', err);
-                await restoreNote(id);
+                console.warn('[Hooks] Cloud restore delayed', err);
             }
-        } else {
-            await restoreNote(id);
         }
     }, [restoreNote, syncService]);
 

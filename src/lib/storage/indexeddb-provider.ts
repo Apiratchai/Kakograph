@@ -81,36 +81,33 @@ export class IndexedDBProvider implements StorageProvider {
 
     async updateNote(id: string, updates: Partial<EncryptedNote>): Promise<void> {
         const db = getDB();
-        await db.notes.update(id, {
-            updatedAt: Date.now(), // Default, can be overridden by ...updates
-            ...updates,
-            synced: false,
-        });
 
-        // Add to sync queue
-        await db.syncQueue.add({
-            id: uuidv4(),
-            noteId: id,
-            operation: 'update',
-            timestamp: Date.now(),
+        await db.transaction('rw', db.notes, db.syncQueue, async () => {
+            const existing = await db.notes.get(id);
+            const now = Date.now();
+            const nextUpdatedAt = updates.updatedAt ?? Math.max(now, (existing?.updatedAt || 0) + 1);
+
+            await db.notes.update(id, {
+                ...updates,
+                updatedAt: nextUpdatedAt,
+                synced: false,
+            });
+
+            // Add to sync queue for background workers
+            await db.syncQueue.add({
+                id: uuidv4(),
+                noteId: id,
+                operation: 'update',
+                timestamp: now,
+            });
         });
     }
 
     async deleteNote(id: string): Promise<void> {
-        const db = getDB();
-        // Soft delete for sync
-        await db.notes.update(id, {
+        // Use updateNote to ensure monotonicity and sync queue addition
+        await this.updateNote(id, {
             deleted: true,
-            updatedAt: Date.now(),
-            synced: false,
-        });
-
-        // Add to sync queue
-        await db.syncQueue.add({
-            id: uuidv4(),
-            noteId: id,
-            operation: 'delete',
-            timestamp: Date.now(),
+            deletedAt: Date.now(),
         });
     }
 
@@ -179,20 +176,11 @@ export class IndexedDBProvider implements StorageProvider {
 
     async bulkDelete(ids: string[]): Promise<void> {
         const db = getDB();
-        const now = Date.now();
-
         await db.transaction('rw', db.notes, db.syncQueue, async () => {
             for (const id of ids) {
-                await db.notes.update(id, {
+                await this.updateNote(id, {
                     deleted: true,
-                    updatedAt: now,
-                    synced: false,
-                });
-                await db.syncQueue.add({
-                    id: uuidv4(),
-                    noteId: id,
-                    operation: 'delete',
-                    timestamp: now,
+                    deletedAt: Date.now()
                 });
             }
         });
