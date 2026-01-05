@@ -12,23 +12,32 @@
 }
 
 /* Fixed Toolbar */
-.editor-toolbar {
+/* Fixed Toolbar */
+.rich-editor-toolbar {
   display: flex;
   align-items: center;
   gap: 0.25rem;
   padding: 0.5rem;
   background: var(--editor-toolbar-bg);
   border-bottom: 1px solid var(--border-primary);
-  flex-wrap: wrap;
-  /* Removed fixed positioning to rely on flex layout */
+  flex-wrap: nowrap;
+  overflow-x: auto;
+  /* Hide scrollbar */
+  -ms-overflow-style: none;
+  scrollbar-width: none;
   width: 100%;
   z-index: 30;
+}
+
+.rich-editor-toolbar::-webkit-scrollbar {
+  display: none;
 }
 
 .toolbar-group {
   display: flex;
   align-items: center;
   gap: 0.125rem;
+  flex-shrink: 0; /* Prevent groups from squishing */
 }
 
 .toolbar-separator {
@@ -36,9 +45,10 @@
   height: 1.5rem;
   background: var(--border-primary);
   margin: 0 0.25rem;
+  flex-shrink: 0;
 }
 
-.editor-toolbar button {
+.rich-editor-toolbar button {
   display: flex;
   align-items: center;
   justify-content: center;
@@ -50,14 +60,15 @@
   color: var(--text-secondary);
   cursor: pointer;
   transition: all 0.15s ease;
+  flex-shrink: 0;
 }
 
-.editor-toolbar button:hover {
+.rich-editor-toolbar button:hover {
   background: var(--hover-bg);
   color: var(--text-primary);
 }
 
-.editor-toolbar button.is-active {
+.rich-editor-toolbar button.is-active {
   background: var(--accent-blue);
   color: var(--text-inverse);
 }

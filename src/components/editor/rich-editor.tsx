@@ -65,10 +65,6 @@ import {
     Subscript as SubIcon,
     Superscript as SuperIcon,
     Eraser,
-    Plus,
-    Trash2,
-    RowsIcon,
-    Columns,
     X
 } from 'lucide-react';
 import './rich-editor.css';
@@ -550,26 +546,27 @@ export function RichEditor({
             />
 
             {showToolbar && editable && (
-                <div className="editor-toolbar">
+                <div className="rich-editor-toolbar scrollbar-hide">
+                    {/* Text Formatting Group */}
                     <div className="toolbar-group">
                         <button
                             onClick={() => editor.chain().focus().toggleBold().run()}
                             className={editor.isActive('bold') ? 'is-active' : ''}
-                            title="Bold"
+                            title="Bold (Cmd+B)"
                         >
                             <Bold size={16} />
                         </button>
                         <button
                             onClick={() => editor.chain().focus().toggleItalic().run()}
                             className={editor.isActive('italic') ? 'is-active' : ''}
-                            title="Italic"
+                            title="Italic (Cmd+I)"
                         >
                             <Italic size={16} />
                         </button>
                         <button
                             onClick={() => editor.chain().focus().toggleUnderline().run()}
                             className={editor.isActive('underline') ? 'is-active' : ''}
-                            title="Underline"
+                            title="Underline (Cmd+U)"
                         >
                             <UnderlineIcon size={16} />
                         </button>
@@ -579,19 +576,6 @@ export function RichEditor({
                             title="Strikethrough"
                         >
                             <Strikethrough size={16} />
-                        </button>
-                        <button
-                            onClick={() => editor.chain().focus().unsetAllMarks().run()}
-                            title="Clear Formatting"
-                        >
-                            <Eraser size={16} />
-                        </button>
-                        <button
-                            onClick={() => editor.chain().focus().toggleCode().run()}
-                            className={editor.isActive('code') ? 'is-active' : ''}
-                            title="Inline Code"
-                        >
-                            <Code size={16} />
                         </button>
                         <button
                             onClick={() => editor.chain().focus().toggleSubscript().run()}
@@ -607,36 +591,44 @@ export function RichEditor({
                         >
                             <SuperIcon size={16} />
                         </button>
+                        <button
+                            onClick={() => editor.chain().focus().unsetAllMarks().clearNodes().run()}
+                            title="Clear Formatting"
+                        >
+                            <Eraser size={16} />
+                        </button>
                     </div>
 
                     <div className="toolbar-separator" />
 
+                    {/* Headings Group */}
                     <div className="toolbar-group">
                         <button
                             onClick={() => editor.chain().focus().toggleHeading({ level: 1 }).run()}
                             className={editor.isActive('heading', { level: 1 }) ? 'is-active' : ''}
                             title="Heading 1"
                         >
-                            <Heading1 size={16} />
+                            <Heading1 size={18} />
                         </button>
                         <button
                             onClick={() => editor.chain().focus().toggleHeading({ level: 2 }).run()}
                             className={editor.isActive('heading', { level: 2 }) ? 'is-active' : ''}
                             title="Heading 2"
                         >
-                            <Heading2 size={16} />
+                            <Heading2 size={18} />
                         </button>
                         <button
                             onClick={() => editor.chain().focus().toggleHeading({ level: 3 }).run()}
                             className={editor.isActive('heading', { level: 3 }) ? 'is-active' : ''}
                             title="Heading 3"
                         >
-                            <Heading3 size={16} />
+                            <Heading3 size={18} />
                         </button>
                     </div>
 
                     <div className="toolbar-separator" />
 
+                    {/* Lists & Indentation Group */}
                     <div className="toolbar-group">
                         <button
                             onClick={() => editor.chain().focus().toggleBulletList().run()}
@@ -648,39 +640,36 @@ export function RichEditor({
                         <button
                             onClick={() => editor.chain().focus().toggleOrderedList().run()}
                             className={editor.isActive('orderedList') ? 'is-active' : ''}
-                            title="Numbered List"
+                            title="Ordered List"
                         >
                             <ListOrdered size={16} />
                         </button>
                         <button
                             onClick={() => editor.chain().focus().toggleTaskList().run()}
                             className={editor.isActive('taskList') ? 'is-active' : ''}
-                            title="Task List"
+                            title="Checklist"
                         >
                             <CheckSquare size={16} />
                         </button>
                         <button
-                            onClick={() => editor.chain().focus().toggleBlockquote().run()}
-                            className={editor.isActive('blockquote') ? 'is-active' : ''}
-                            title="Block Quote"
+                            onClick={() => editor.chain().focus().sinkListItem('listItem').run()}
+                            disabled={!editor.can().sinkListItem('listItem')}
+                            title="Indent"
                         >
-                            <Quote size={16} />
-                        </button>
-                    </div>
-
-                    <div className="toolbar-separator" />
-
-                    <div className="toolbar-group">
-                        <button onClick={outdent} title="Outdent (Shift+Tab)">
-                            <IndentDecrease size={16} />
-                        </button>
-                        <button onClick={indent} title="Indent (Tab)">
                             <IndentIncrease size={16} />
                         </button>
+                        <button
+                            onClick={() => editor.chain().focus().liftListItem('listItem').run()}
+                            disabled={!editor.can().liftListItem('listItem')}
+                            title="Outdent"
+                        >
+                            <IndentDecrease size={16} />
+                        </button>
                     </div>
 
                     <div className="toolbar-separator" />
 
+                    {/* Alignment Group */}
                     <div className="toolbar-group">
                         <button
                             onClick={() => editor.chain().focus().setTextAlign('left').run()}
@@ -707,6 +696,7 @@ export function RichEditor({
 
                     <div className="toolbar-separator" />
 
+                    {/* Colors Group */}
                     <div className="toolbar-group">
                         <button
                             onClick={() => setShowTextColorModal(true)}
@@ -725,77 +715,29 @@ export function RichEditor({
 
                     <div className="toolbar-separator" />
 
+                    {/* Insert Group */}
                     <div className="toolbar-group">
                         <button
-                            onClick={() => editor.chain().focus().insertTable({ rows: 3, cols: 3, withHeaderRow: true }).run()}
-                            title="Insert Table"
+                            onClick={() => editor.chain().focus().toggleBlockquote().run()}
+                            className={editor.isActive('blockquote') ? 'is-active' : ''}
+                            title="Quote"
                         >
-                            <TableIcon size={16} />
-                        </button>
-                        {/* Row controls */}
-                        <button
-                            onClick={() => editor.chain().focus().addRowBefore().run()}
-                            disabled={!editor.can().addRowBefore()}
-                            title="Add Row Above"
-                            style={{ opacity: editor.can().addRowBefore() ? 1 : 0.3 }}
-                        >
-                            <RowsIcon size={14} />↑
+                            <Quote size={16} />
                         </button>
                         <button
-                            onClick={() => editor.chain().focus().addRowAfter().run()}
-                            disabled={!editor.can().addRowAfter()}
-                            title="Add Row Below"
-                            style={{ opacity: editor.can().addRowAfter() ? 1 : 0.3 }}
+                            onClick={() => editor.chain().focus().toggleCodeBlock().run()}
+                            className={editor.isActive('codeBlock') ? 'is-active' : ''}
+                            title="Code Block"
                         >
-                            <RowsIcon size={14} />↓
+                            <Code2 size={16} />
                         </button>
                         <button
-                            onClick={() => editor.chain().focus().deleteRow().run()}
-                            disabled={!editor.can().deleteRow()}
-                            title="Delete Row"
-                            style={{ opacity: editor.can().deleteRow() ? 1 : 0.3 }}
+                            onClick={() => editor.chain().focus().toggleCode().run()}
+                            className={editor.isActive('code') ? 'is-active' : ''}
+                            title="Inline Code"
                         >
-                            <Trash2 size={14} /><RowsIcon size={12} />
+                            <Code size={16} />
                         </button>
-                        {/* Column controls */}
-                        <button
-                            onClick={() => editor.chain().focus().addColumnBefore().run()}
-                            disabled={!editor.can().addColumnBefore()}
-                            title="Add Column Left"
-                            style={{ opacity: editor.can().addColumnBefore() ? 1 : 0.3 }}
-                        >
-                            ←<Columns size={14} />
-                        </button>
-                        <button
-                            onClick={() => editor.chain().focus().addColumnAfter().run()}
-                            disabled={!editor.can().addColumnAfter()}
-                            title="Add Column Right"
-                            style={{ opacity: editor.can().addColumnAfter() ? 1 : 0.3 }}
-                        >
-                            <Columns size={14} />→
-                        </button>
-                        <button
-                            onClick={() => editor.chain().focus().deleteColumn().run()}
-                            disabled={!editor.can().deleteColumn()}
-                            title="Delete Column"
-                            style={{ opacity: editor.can().deleteColumn() ? 1 : 0.3 }}
-                        >
-                            <Trash2 size={14} /><Columns size={12} />
-                        </button>
-                        {/* Delete table */}
-                        <button
-                            onClick={() => editor.chain().focus().deleteTable().run()}
-                            disabled={!editor.can().deleteTable()}
-                            title="Delete Table"
-                            style={{ opacity: editor.can().deleteTable() ? 1 : 0.3, color: editor.can().deleteTable() ? 'var(--accent-red)' : undefined }}
-                        >
-                            <X size={14} /><TableIcon size={12} />
-                        </button>
-                    </div>
-
-                    <div className="toolbar-separator" />
-
-                    <div className="toolbar-group">
                         <button
                             onClick={openLinkModal}
                             className={editor.isActive('link') ? 'is-active' : ''}
@@ -810,11 +752,10 @@ export function RichEditor({
                             <ImageIcon size={16} />
                         </button>
                         <button
-                            onClick={() => editor.chain().focus().toggleCodeBlock().run()}
-                            className={editor.isActive('codeBlock') ? 'is-active' : ''}
-                            title="Code Block"
+                            onClick={() => editor.chain().focus().insertTable({ rows: 3, cols: 3, withHeaderRow: true }).run()}
+                            title="Insert Table"
                         >
-                            <Code2 size={16} />
+                            <TableIcon size={16} />
                         </button>
                         <button
                             onClick={() => editor.chain().focus().setHorizontalRule().run()}
