@@ -12,39 +12,66 @@
 }
 
 /* Fixed Toolbar */
-/* Fixed Toolbar */
-.rich-editor-toolbar {
+/* Fixed Toolbar Wrapper */
+.rich-editor-toolbar-wrapper {
   display: flex;
-  align-items: center;
-  gap: 0.25rem;
-  padding: 0.5rem;
+  flex-direction: column;
   background: var(--editor-toolbar-bg);
   border-bottom: 1px solid var(--border-primary);
-  flex-wrap: nowrap;
-  overflow-x: auto;
-  /* Hide scrollbar */
-  -ms-overflow-style: none;
-  scrollbar-width: none;
   width: 100%;
   z-index: 30;
 }
 
-.rich-editor-toolbar::-webkit-scrollbar {
+/* Primary Row (Top): Undo/Redo + Insert */
+.rich-editor-toolbar-primary {
+  display: flex;
+  align-items: center;
+  padding: 0.5rem;
+  gap: 0.25rem;
+  width: 100%;
+}
+
+/* Secondary Row (Bottom): Formatting */
+.rich-editor-toolbar-secondary {
+  display: flex;
+  align-items: center;
+  gap: 0.25rem; /* Tightened gap as requested */
+  padding: 0.5rem 1rem; /* More padding on ends */
+  width: 100%;
+  overflow-x: auto;
+  /* Hide scrollbar */
+  -ms-overflow-style: none; /* IE and Edge */
+  scrollbar-width: none; /* Firefox */
+}
+
+.rich-editor-toolbar-secondary::-webkit-scrollbar {
   display: none;
 }
 
+.toolbar-spacer-flex {
+  flex: 1;
+}
+
+.toolbar-separator-horizontal {
+  height: 1px;
+  background: var(--border-primary);
+  width: 100%;
+  opacity: 0.5;
+}
+
+/* Common Group Styles */
 .toolbar-group {
   display: flex;
   align-items: center;
-  gap: 0.125rem;
-  flex-shrink: 0; /* Prevent groups from squishing */
+  gap: 0.25rem; /* Tightened spacing */
+  flex-shrink: 0;
 }
 
 .toolbar-separator {
   width: 1px;
   height: 1.5rem;
   background: var(--border-primary);
-  margin: 0 0.25rem;
+  margin: 0; /* Let flex gap handle spacing */
   flex-shrink: 0;
 }
 
@@ -57,20 +84,26 @@
   background: transparent;
   border: none;
   border-radius: 0.25rem;
-  color: var(--text-secondary);
+  color: var(--text-secondary); /* Match settings button */
   cursor: pointer;
   transition: all 0.15s ease;
   flex-shrink: 0;
 }
 
+.rich-editor-toolbar button svg {
+  width: 20px;
+  height: 20px;
+}
+
 .rich-editor-toolbar button:hover {
   background: var(--hover-bg);
-  color: var(--text-primary);
+  color: var(--text-primary); /* Darker on hover */
 }
 
 .rich-editor-toolbar button.is-active {
   background: var(--accent-blue);
   color: var(--text-inverse);
+
 }
 
 /* Main editor content area */
@@ -89,7 +122,10 @@
   line-height: 1.75;
   color: var(--text-primary);
   background: var(--editor-content-bg);
-  overflow-y: auto;
+  /* Allow both horizontal and vertical scrolling */
+  overflow: auto;
+  /* Smooth scrolling for better mobile experience */
+  -webkit-overflow-scrolling: touch;
 }
 
 /* Placeholder text */
@@ -152,6 +188,53 @@
   margin-bottom: 0.75rem;
 }
 
+/* Standard Task Lists (TipTap) */
+.rich-editor-content ul[data-type="taskList"],
+.ProseMirror ul[data-type="taskList"] {
+  list-style: none !important;
+  padding: 0 !important;
+  margin: 0 !important;
+}
+
+/* Force side-by-side using the new class */
+.task-item-row {
+  display: flex !important;
+  flex-direction: row !important;
+  align-items: flex-start !important;
+  gap: 0.5rem !important;
+  margin-bottom: 0.5rem !important;
+  list-style: none !important;
+}
+
+/* Kill Tailwind Bullet */
+.task-item-row::before {
+  display: none !important;
+  content: none !important;
+}
+
+.task-item-row > label {
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  flex-shrink: 0 !important;
+  margin: 0 !important;
+  padding: 0 !important;
+  height: 1.75rem !important; /* Match text height */
+}
+
+.task-item-row > div,
+.task-item-row > p {
+  flex: 1 !important;
+  margin: 0 !important;
+  padding: 0 !important;
+  min-width: 0 !important;
+}
+
+/* Remove p margins inside task items */
+.task-item-row p {
+  margin: 0 !important;
+}
+
 .rich-editor-content ol {
   list-style-type: decimal;
   padding-left: 1.5rem;
@@ -168,7 +251,8 @@
   table-layout: fixed;
   width: 100%;
   margin: 0;
-  overflow: hidden;
+  /* Remove overflow: hidden to allow resize handles to be seen/grabbed */
+  overflow: visible; 
   border: 1px solid var(--border-primary);
   margin-bottom: 1rem;
 }
@@ -202,14 +286,34 @@
 
 .rich-editor-content table .column-resize-handle {
   position: absolute;
-  right: -2px;
+  right: -6px; /* Centered relative to border */
   top: 0;
   bottom: -2px;
-  width: 4px;
-  background-color: var(--accent-blue);
+  width: 12px; /* Increased width for easier touch/grabbing */
+  background-color: transparent; /* Keep distinct visual line separate if needed, or use bg color */
   pointer-events: auto;
   cursor: col-resize;
   touch-action: none;
+  z-index: 20; /* Ensure it's above other elements */
+}
+
+/* Visual indicator for the handle (optional, so the hit area is invisible but the line is visible) */
+.rich-editor-content table .column-resize-handle::after {
+    content: '';
+    position: absolute;
+    left: 50%;
+    top: 0;
+    bottom: 0;
+    width: 2px;
+    background-color: var(--accent-color, #3b82f6); /* Use accent color or fallback */
+    transform: translateX(-50%);
+    opacity: 0;
+    transition: opacity 0.2s;
+}
+
+.rich-editor-content table .column-resize-handle:hover::after,
+.rich-editor-content table .column-resize-handle:active::after {
+    opacity: 1;
 }
 
 /* Row/column handles removed - using React 3-dots menu instead */
@@ -223,6 +327,59 @@
   margin-bottom: 0.75rem;
   color: var(--text-secondary);
   font-style: italic;
+}
+
+/* =========================================
+   Responsive Toolbar (PC: 1 Row, Mobile: 2 Rows)
+   ========================================= */
+@media (min-width: 768px) {
+    /* Main wrapper becomes the single row container */
+    .rich-editor-toolbar-wrapper {
+        flex-direction: row;
+        align-items: center;
+        flex-wrap: nowrap;
+        padding: 0.5rem;
+        gap: 0.25rem; /* Tightened gap */
+        overflow-x: auto; /* Allow scroll if window is narrow PC window */
+    }
+
+    /* Enforce strict 32x32 size on PC as requested */
+    .rich-editor-toolbar button {
+        width: 32px;
+        height: 32px;
+    }
+
+    /* Flatten the 2-row structure using display: contents */
+    .rich-editor-toolbar-primary,
+    .rich-editor-toolbar-secondary {
+        display: contents;
+    }
+
+    /* Hide mobile-specific spacers */
+    .toolbar-spacer-flex,
+    .toolbar-separator-horizontal {
+        display: none;
+    }
+
+    /* Reorder Groups using Flexbox Order */
+    /* Default order for everything else is 0 */
+  
+    /* Undo/Redo handled in Header on PC, so hide it here */
+    .group-undo {
+        display: none;
+    }
+
+    /* Insert group moves to the end */
+    .group-insert {
+        order: 99;
+    }
+
+    /* Ensure separators behave in the single row */
+    .toolbar-separator {
+        display: block;
+        height: 1.5rem;
+        margin: 0;
+    }
 }
 
 /* Code inline - enhanced styling */

@@ -65,7 +65,9 @@ import {
     Subscript as SubIcon,
     Superscript as SuperIcon,
     Eraser,
-    X
+    X,
+    Undo2,
+    Redo2
 } from 'lucide-react';
 import './rich-editor.css';
 
@@ -214,6 +216,9 @@ export function RichEditor({
             TaskList,
             TaskItem.configure({
                 nested: true,
+                HTMLAttributes: {
+                    class: 'task-item-row',
+                },
             }),
             Link.configure({
                 openOnClick: false,
@@ -546,223 +551,270 @@ export function RichEditor({
             />
 
             {showToolbar && editable && (
-                <div className="rich-editor-toolbar scrollbar-hide">
-                    {/* Text Formatting Group */}
-                    <div className="toolbar-group">
-                        <button
-                            onClick={() => editor.chain().focus().toggleBold().run()}
-                            className={editor.isActive('bold') ? 'is-active' : ''}
-                            title="Bold (Cmd+B)"
-                        >
-                            <Bold size={16} />
-                        </button>
-                        <button
-                            onClick={() => editor.chain().focus().toggleItalic().run()}
-                            className={editor.isActive('italic') ? 'is-active' : ''}
-                            title="Italic (Cmd+I)"
-                        >
-                            <Italic size={16} />
-                        </button>
-                        <button
-                            onClick={() => editor.chain().focus().toggleUnderline().run()}
-                            className={editor.isActive('underline') ? 'is-active' : ''}
-                            title="Underline (Cmd+U)"
-                        >
-                            <UnderlineIcon size={16} />
-                        </button>
-                        <button
-                            onClick={() => editor.chain().focus().toggleStrike().run()}
-                            className={editor.isActive('strike') ? 'is-active' : ''}
-                            title="Strikethrough"
-                        >
-                            <Strikethrough size={16} />
-                        </button>
-                        <button
-                            onClick={() => editor.chain().focus().toggleSubscript().run()}
-                            className={editor.isActive('subscript') ? 'is-active' : ''}
-                            title="Subscript"
-                        >
-                            <SubIcon size={16} />
-                        </button>
-                        <button
-                            onClick={() => editor.chain().focus().toggleSuperscript().run()}
-                            className={editor.isActive('superscript') ? 'is-active' : ''}
-                            title="Superscript"
-                        >
-                            <SuperIcon size={16} />
-                        </button>
-                        <button
-                            onClick={() => editor.chain().focus().unsetAllMarks().clearNodes().run()}
-                            title="Clear Formatting"
-                        >
-                            <Eraser size={16} />
-                        </button>
+                <div className="rich-editor-toolbar rich-editor-toolbar-wrapper">
+                    {/* Top Row: Undo/Redo and Insert Actions */}
+                    <div className="rich-editor-toolbar-primary">
+                        {/* Undo/Redo Group */}
+                        <div className="toolbar-group group-undo">
+                            <button
+                                onClick={() => editor.chain().focus().undo().run()}
+                                disabled={!editor.can().undo()}
+                                title="Undo (Cmd+Z)"
+                                style={{ opacity: editor.can().undo() ? 1 : 0.5 }}
+                            >
+                                <Undo2 size={18} />
+                            </button>
+                            <button
+                                onClick={() => editor.chain().focus().redo().run()}
+                                disabled={!editor.can().redo()}
+                                title="Redo (Cmd+Y)"
+                                style={{ opacity: editor.can().redo() ? 1 : 0.5 }}
+                            >
+                                <Redo2 size={18} />
+                            </button>
+                        </div>
+
+                        {/* Spacer to push Insert group to the right */}
+                        <div className="toolbar-spacer-flex" />
+
+                        {/* Insert Group */}
+                        <div className="toolbar-group group-insert">
+                            <button
+                                onClick={() => editor.chain().focus().toggleBlockquote().run()}
+                                className={editor.isActive('blockquote') ? 'is-active' : ''}
+                                title="Quote"
+                            >
+                                <Quote size={16} />
+                            </button>
+                            <button
+                                onClick={() => editor.chain().focus().toggleCodeBlock().run()}
+                                className={editor.isActive('codeBlock') ? 'is-active' : ''}
+                                title="Code Block"
+                            >
+                                <Code2 size={16} />
+                            </button>
+                            <button
+                                onClick={openLinkModal}
+                                className={editor.isActive('link') ? 'is-active' : ''}
+                                title="Add Link"
+                            >
+                                <LinkIcon size={16} />
+                            </button>
+                            <button
+                                onClick={() => fileInputRef.current?.click()}
+                                title="Upload Image"
+                            >
+                                <ImageIcon size={16} />
+                            </button>
+                            <button
+                                onClick={() => editor.chain().focus().insertTable({ rows: 3, cols: 3, withHeaderRow: true }).run()}
+                                title="Insert Table"
+                            >
+                                <TableIcon size={16} />
+                            </button>
+                            <button
+                                onClick={() => editor.chain().focus().setHorizontalRule().run()}
+                                title="Horizontal Rule"
+                            >
+                                <Minus size={16} />
+                            </button>
+                        </div>
                     </div>
 
-                    <div className="toolbar-separator" />
+                    <div className="toolbar-separator-horizontal" />
 
-                    {/* Headings Group */}
-                    <div className="toolbar-group">
-                        <button
-                            onClick={() => editor.chain().focus().toggleHeading({ level: 1 }).run()}
-                            className={editor.isActive('heading', { level: 1 }) ? 'is-active' : ''}
-                            title="Heading 1"
-                        >
-                            <Heading1 size={18} />
-                        </button>
-                        <button
-                            onClick={() => editor.chain().focus().toggleHeading({ level: 2 }).run()}
-                            className={editor.isActive('heading', { level: 2 }) ? 'is-active' : ''}
-                            title="Heading 2"
-                        >
-                            <Heading2 size={18} />
-                        </button>
-                        <button
-                            onClick={() => editor.chain().focus().toggleHeading({ level: 3 }).run()}
-                            className={editor.isActive('heading', { level: 3 }) ? 'is-active' : ''}
-                            title="Heading 3"
-                        >
-                            <Heading3 size={18} />
-                        </button>
-                    </div>
+                    {/* Bottom Row: Formatting Tools (Scrollable) */}
+                    <div className="rich-editor-toolbar-secondary scrollbar-hide">
+                        {/* Text Formatting Group */}
+                        <div className="toolbar-group">
+                            <button
+                                onClick={() => editor.chain().focus().toggleBold().run()}
+                                className={editor.isActive('bold') ? 'is-active' : ''}
+                                title="Bold (Cmd+B)"
+                            >
+                                <Bold size={16} />
+                            </button>
+                            <button
+                                onClick={() => editor.chain().focus().toggleItalic().run()}
+                                className={editor.isActive('italic') ? 'is-active' : ''}
+                                title="Italic (Cmd+I)"
+                            >
+                                <Italic size={16} />
+                            </button>
+                            <button
+                                onClick={() => editor.chain().focus().toggleUnderline().run()}
+                                className={editor.isActive('underline') ? 'is-active' : ''}
+                                title="Underline (Cmd+U)"
+                            >
+                                <UnderlineIcon size={16} />
+                            </button>
+                            <button
+                                onClick={() => editor.chain().focus().toggleStrike().run()}
+                                className={editor.isActive('strike') ? 'is-active' : ''}
+                                title="Strikethrough"
+                            >
+                                <Strikethrough size={16} />
+                            </button>
+                            <button
+                                onClick={() => editor.chain().focus().unsetAllMarks().clearNodes().run()}
+                                title="Clear Formatting"
+                            >
+                                <Eraser size={16} />
+                            </button>
+                        </div>
 
-                    <div className="toolbar-separator" />
+                        <div className="toolbar-separator" />
 
-                    {/* Lists & Indentation Group */}
-                    <div className="toolbar-group">
-                        <button
-                            onClick={() => editor.chain().focus().toggleBulletList().run()}
-                            className={editor.isActive('bulletList') ? 'is-active' : ''}
-                            title="Bullet List"
-                        >
-                            <List size={16} />
-                        </button>
-                        <button
-                            onClick={() => editor.chain().focus().toggleOrderedList().run()}
-                            className={editor.isActive('orderedList') ? 'is-active' : ''}
-                            title="Ordered List"
-                        >
-                            <ListOrdered size={16} />
-                        </button>
-                        <button
-                            onClick={() => editor.chain().focus().toggleTaskList().run()}
-                            className={editor.isActive('taskList') ? 'is-active' : ''}
-                            title="Checklist"
-                        >
-                            <CheckSquare size={16} />
-                        </button>
-                        <button
-                            onClick={() => editor.chain().focus().sinkListItem('listItem').run()}
-                            disabled={!editor.can().sinkListItem('listItem')}
-                            title="Indent"
-                        >
-                            <IndentIncrease size={16} />
-                        </button>
-                        <button
-                            onClick={() => editor.chain().focus().liftListItem('listItem').run()}
-                            disabled={!editor.can().liftListItem('listItem')}
-                            title="Outdent"
-                        >
-                            <IndentDecrease size={16} />
-                        </button>
-                    </div>
+                        {/* Inline Code */}
+                        <div className="toolbar-group">
+                            <button
+                                onClick={() => editor.chain().focus().toggleCode().run()}
+                                className={editor.isActive('code') ? 'is-active' : ''}
+                                title="Inline Code"
+                            >
+                                <Code size={16} />
+                            </button>
+                        </div>
 
-                    <div className="toolbar-separator" />
+                        <div className="toolbar-separator" />
 
-                    {/* Alignment Group */}
-                    <div className="toolbar-group">
-                        <button
-                            onClick={() => editor.chain().focus().setTextAlign('left').run()}
-                            className={editor.isActive({ textAlign: 'left' }) ? 'is-active' : ''}
-                            title="Align Left"
-                        >
-                            <AlignLeft size={16} />
-                        </button>
-                        <button
-                            onClick={() => editor.chain().focus().setTextAlign('center').run()}
-                            className={editor.isActive({ textAlign: 'center' }) ? 'is-active' : ''}
-                            title="Align Center"
-                        >
-                            <AlignCenter size={16} />
-                        </button>
-                        <button
-                            onClick={() => editor.chain().focus().setTextAlign('right').run()}
-                            className={editor.isActive({ textAlign: 'right' }) ? 'is-active' : ''}
-                            title="Align Right"
-                        >
-                            <AlignRight size={16} />
-                        </button>
-                    </div>
+                        {/* Sub/Superscript */}
+                        <div className="toolbar-group">
+                            <button
+                                onClick={() => editor.chain().focus().toggleSubscript().run()}
+                                className={editor.isActive('subscript') ? 'is-active' : ''}
+                                title="Subscript"
+                            >
+                                <SubIcon size={16} />
+                            </button>
+                            <button
+                                onClick={() => editor.chain().focus().toggleSuperscript().run()}
+                                className={editor.isActive('superscript') ? 'is-active' : ''}
+                                title="Superscript"
+                            >
+                                <SuperIcon size={16} />
+                            </button>
+                        </div>
 
-                    <div className="toolbar-separator" />
+                        <div className="toolbar-separator" />
 
-                    {/* Colors Group */}
-                    <div className="toolbar-group">
-                        <button
-                            onClick={() => setShowTextColorModal(true)}
-                            title="Text Color"
-                        >
-                            <Palette size={16} />
-                        </button>
-                        <button
-                            onClick={() => setShowHighlightModal(true)}
-                            className={editor.isActive('highlight') ? 'is-active' : ''}
-                            title="Highlight"
-                        >
-                            <Highlighter size={16} />
-                        </button>
-                    </div>
+                        {/* Headings Group */}
+                        <div className="toolbar-group">
+                            <button
+                                onClick={() => editor.chain().focus().toggleHeading({ level: 1 }).run()}
+                                className={editor.isActive('heading', { level: 1 }) ? 'is-active' : ''}
+                                title="Heading 1"
+                            >
+                                <Heading1 size={18} />
+                            </button>
+                            <button
+                                onClick={() => editor.chain().focus().toggleHeading({ level: 2 }).run()}
+                                className={editor.isActive('heading', { level: 2 }) ? 'is-active' : ''}
+                                title="Heading 2"
+                            >
+                                <Heading2 size={18} />
+                            </button>
+                            <button
+                                onClick={() => editor.chain().focus().toggleHeading({ level: 3 }).run()}
+                                className={editor.isActive('heading', { level: 3 }) ? 'is-active' : ''}
+                                title="Heading 3"
+                            >
+                                <Heading3 size={18} />
+                            </button>
+                        </div>
 
-                    <div className="toolbar-separator" />
+                        <div className="toolbar-separator" />
 
-                    {/* Insert Group */}
-                    <div className="toolbar-group">
-                        <button
-                            onClick={() => editor.chain().focus().toggleBlockquote().run()}
-                            className={editor.isActive('blockquote') ? 'is-active' : ''}
-                            title="Quote"
-                        >
-                            <Quote size={16} />
-                        </button>
-                        <button
-                            onClick={() => editor.chain().focus().toggleCodeBlock().run()}
-                            className={editor.isActive('codeBlock') ? 'is-active' : ''}
-                            title="Code Block"
-                        >
-                            <Code2 size={16} />
-                        </button>
-                        <button
-                            onClick={() => editor.chain().focus().toggleCode().run()}
-                            className={editor.isActive('code') ? 'is-active' : ''}
-                            title="Inline Code"
-                        >
-                            <Code size={16} />
-                        </button>
-                        <button
-                            onClick={openLinkModal}
-                            className={editor.isActive('link') ? 'is-active' : ''}
-                            title="Add Link"
-                        >
-                            <LinkIcon size={16} />
-                        </button>
-                        <button
-                            onClick={() => fileInputRef.current?.click()}
-                            title="Upload Image"
-                        >
-                            <ImageIcon size={16} />
-                        </button>
-                        <button
-                            onClick={() => editor.chain().focus().insertTable({ rows: 3, cols: 3, withHeaderRow: true }).run()}
-                            title="Insert Table"
-                        >
-                            <TableIcon size={16} />
-                        </button>
-                        <button
-                            onClick={() => editor.chain().focus().setHorizontalRule().run()}
-                            title="Horizontal Rule"
-                        >
-                            <Minus size={16} />
-                        </button>
+                        {/* Lists & Indentation Group */}
+                        <div className="toolbar-group">
+                            <button
+                                onClick={() => editor.chain().focus().toggleBulletList().run()}
+                                className={editor.isActive('bulletList') ? 'is-active' : ''}
+                                title="Bullet List"
+                            >
+                                <List size={16} />
+                            </button>
+                            <button
+                                onClick={() => editor.chain().focus().toggleOrderedList().run()}
+                                className={editor.isActive('orderedList') ? 'is-active' : ''}
+                                title="Ordered List"
+                            >
+                                <ListOrdered size={16} />
+                            </button>
+                            <button
+                                onClick={() => editor.chain().focus().toggleTaskList().run()}
+                                className={editor.isActive('taskList') ? 'is-active' : ''}
+                                title="Checklist"
+                            >
+                                <CheckSquare size={16} />
+                            </button>
+                        </div>
+
+                        <div className="toolbar-separator" />
+
+                        {/* Indentation */}
+                        <div className="toolbar-group">
+                            <button
+                                onClick={() => editor.chain().focus().sinkListItem('listItem').run()}
+                                disabled={!editor.can().sinkListItem('listItem')}
+                                title="Indent"
+                            >
+                                <IndentIncrease size={16} />
+                            </button>
+                            <button
+                                onClick={() => editor.chain().focus().liftListItem('listItem').run()}
+                                disabled={!editor.can().liftListItem('listItem')}
+                                title="Outdent"
+                            >
+                                <IndentDecrease size={16} />
+                            </button>
+                        </div>
+
+                        <div className="toolbar-separator" />
+
+                        {/* Alignment Group */}
+                        <div className="toolbar-group">
+                            <button
+                                onClick={() => editor.chain().focus().setTextAlign('left').run()}
+                                className={editor.isActive({ textAlign: 'left' }) ? 'is-active' : ''}
+                                title="Align Left"
+                            >
+                                <AlignLeft size={16} />
+                            </button>
+                            <button
+                                onClick={() => editor.chain().focus().setTextAlign('center').run()}
+                                className={editor.isActive({ textAlign: 'center' }) ? 'is-active' : ''}
+                                title="Align Center"
+                            >
+                                <AlignCenter size={16} />
+                            </button>
+                            <button
+                                onClick={() => editor.chain().focus().setTextAlign('right').run()}
+                                className={editor.isActive({ textAlign: 'right' }) ? 'is-active' : ''}
+                                title="Align Right"
+                            >
+                                <AlignRight size={16} />
+                            </button>
+                        </div>
+
+                        <div className="toolbar-separator" />
+
+                        {/* Colors Group */}
+                        <div className="toolbar-group">
+                            <button
+                                onClick={() => setShowTextColorModal(true)}
+                                title="Text Color"
+                            >
+                                <Palette size={16} />
+                            </button>
+                            <button
+                                onClick={() => setShowHighlightModal(true)}
+                                className={editor.isActive('highlight') ? 'is-active' : ''}
+                                title="Highlight"
+                            >
+                                <Highlighter size={16} />
+                            </button>
+                        </div>
                     </div>
                 </div>
             )}

@@ -1164,27 +1164,27 @@ export default function WritePage() {
                         <Menu size={20} />
                     </button>
 
-                    {/* Quick actions: Undo/Redo */}
-                    <div className="flex items-center gap-1 ml-2 border-l border-[var(--border-primary)] pl-2">
+                    {/* PC Only: Undo/Redo in Header */}
+                    <div className="hidden md:flex items-center gap-1 ml-2 border-r border-slate-700/30 pr-2 mr-2">
                         <button
-                            className="icon-button"
-                            title="Undo (Ctrl+Z)"
+                            className="icon-button !w-8 !h-8" // Enforce 32px (8 * 4px)
                             onClick={() => editorControls?.undo()}
                             disabled={!editorControls}
-                            style={{ opacity: editorControls ? 1 : 0.5 }}
+                            title="Undo (Cmd+Z)"
                         >
-                            <Undo2 size={18} />
+                            <Undo2 size={20} className="text-slate-400 hover:text-blue-400" />
                         </button>
                         <button
-                            className="icon-button"
-                            title="Redo (Ctrl+Y)"
+                            className="icon-button !w-8 !h-8" // Enforce 32px
                             onClick={() => editorControls?.redo()}
                             disabled={!editorControls}
-                            style={{ opacity: editorControls ? 1 : 0.5 }}
+                            title="Redo (Cmd+Y)"
                         >
-                            <Redo2 size={18} />
+                            <Redo2 size={20} className="text-slate-400 hover:text-blue-400" />
                         </button>
                     </div>
+
+
 
                     <div className="header-center flex items-center gap-2">
                         <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-blue-500">
