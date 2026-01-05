@@ -343,12 +343,22 @@ export default function WritePage() {
         }
     }, [currentNote]);
 
-    // Autosave with debounce (3 seconds)
+    // Autosave with debounce (1 second)
+    const titleUpdateRef = useRef<NodeJS.Timeout | null>(null);
+
     const handleContentChange = useCallback((newContent: string) => {
         setContent(newContent);
-        updateNoteLocal(newContent); // Instant UI update
 
-        // Clear existing timeout
+        // Debounce title update (sidebar) to reduce typing latency
+        // This batches the extractTitle() + setState calls
+        if (titleUpdateRef.current) {
+            clearTimeout(titleUpdateRef.current);
+        }
+        titleUpdateRef.current = setTimeout(() => {
+            updateNoteLocal(newContent);
+        }, 150); // 150ms delay for title update
+
+        // Clear existing save timeout
         if (saveTimeoutRef.current) {
             clearTimeout(saveTimeoutRef.current);
         }
