@@ -327,11 +327,16 @@ export function RichEditor({
 
     // Update content when prop changes
     useEffect(() => {
-        if (editor && content !== editor.getHTML()) {
+        if (!editor) return;
+
+        // Skip if editor is focused - user is actively typing
+        // This prevents cursor jump when save/sync triggers loadNotes()
+        if (editor.isFocused) return;
+
+        // Only update if content actually differs
+        if (content !== editor.getHTML()) {
             isProgrammaticUpdate.current = true;
             editor.commands.setContent(content);
-            // Reset flag after update is processed (next tick unsafe? no, synchronous)
-            // But to be safe, setTimeout? No, TipTap update is sync.
             isProgrammaticUpdate.current = false;
         }
     }, [content, editor]);
