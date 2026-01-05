@@ -11,7 +11,7 @@ import { useRouter } from 'next/navigation';
 import { useAuth } from '@/lib/auth/context';
 import { RichEditor } from '@/components/editor/rich-editor';
 import { useNotes } from '@/lib/notes/hooks';
-import { RefreshCw, Wifi, Cloud, CloudOff, Lock, LockOpen, Settings, ChevronRight, Folder, Hash, List, Trash2, Check, Plus, Upload, Download, Search, X, Link as LinkIcon, AlertTriangle, ArrowRight, Loader2, Sparkles, Sun, Moon, Shield, Menu, ChevronLeft, Network, PenTool, FolderPlus, ChevronDown } from 'lucide-react';
+import { RefreshCw, Wifi, Cloud, CloudOff, Lock, LockOpen, Settings, ChevronRight, Folder, Hash, List, Trash2, Check, Plus, Upload, Download, Search, X, Link as LinkIcon, AlertTriangle, ArrowRight, Loader2, Sparkles, Sun, Moon, Shield, Menu, ChevronLeft, Network, PenTool, FolderPlus, ChevronDown, Undo2, Redo2 } from 'lucide-react';
 import { useConvexConfig, SyncMode } from '@/lib/convex/provider';
 import { useTheme } from '@/lib/theme/provider';
 import { PinKeypad } from '@/components/auth/pin-keypad';
@@ -118,6 +118,8 @@ export default function WritePage() {
     const saveTimeoutRef = useRef<NodeJS.Timeout | null>(null);
     const [lastSaved, setLastSaved] = useState<Date | null>(null);
 
+    // Editor controls exposed from RichEditor
+    const [editorControls, setEditorControls] = useState<{ undo: () => void; redo: () => void } | null>(null);
 
 
     // Modal Configuration
@@ -1162,6 +1164,28 @@ export default function WritePage() {
                         <Menu size={20} />
                     </button>
 
+                    {/* Quick actions: Undo/Redo */}
+                    <div className="flex items-center gap-1 ml-2 border-l border-[var(--border-primary)] pl-2">
+                        <button
+                            className="icon-button"
+                            title="Undo (Ctrl+Z)"
+                            onClick={() => editorControls?.undo()}
+                            disabled={!editorControls}
+                            style={{ opacity: editorControls ? 1 : 0.5 }}
+                        >
+                            <Undo2 size={18} />
+                        </button>
+                        <button
+                            className="icon-button"
+                            title="Redo (Ctrl+Y)"
+                            onClick={() => editorControls?.redo()}
+                            disabled={!editorControls}
+                            style={{ opacity: editorControls ? 1 : 0.5 }}
+                        >
+                            <Redo2 size={18} />
+                        </button>
+                    </div>
+
                     <div className="header-center flex items-center gap-2">
                         <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-blue-500">
                             <path d="M21.174 6.812a1 1 0 0 0-3.986-3.987L3.842 16.174a2 2 0 0 0-.5.83l-1.321 4.352a.5.5 0 0 0 .623.622l4.353-1.32a2 2 0 0 0 .83-.497z" />
@@ -1378,6 +1402,8 @@ export default function WritePage() {
                             // Pass Conflict Props
                             conflictContent={currentNote?.conflictContent}
                             onResolveConflict={handleResolveConflict}
+                            // Expose undo/redo to header buttons
+                            onEditorReady={setEditorControls}
                         />
                     </div>
 

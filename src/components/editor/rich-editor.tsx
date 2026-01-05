@@ -6,6 +6,7 @@
  */
 
 import { useEditor, EditorContent, Extension } from '@tiptap/react';
+import { BubbleMenu } from '@tiptap/react/menus';
 import StarterKit from '@tiptap/starter-kit';
 import Placeholder from '@tiptap/extension-placeholder';
 import CodeBlockLowlight from '@tiptap/extension-code-block-lowlight';
@@ -42,10 +43,10 @@ import {
     Underline as UnderlineIcon,
     Strikethrough,
     Code,
+    Quote,
     Link as LinkIcon,
     List,
     ListOrdered,
-    Quote,
     CheckSquare,
     Heading1,
     Heading2,
@@ -56,7 +57,6 @@ import {
     Table as TableIcon,
     Palette,
     Highlighter,
-    Type,
     IndentDecrease,
     IndentIncrease,
     AlignLeft,
@@ -122,6 +122,8 @@ interface RichEditorProps {
     // NEW: Conflict Resolution Props
     conflictContent?: string;
     onResolveConflict?: () => void;
+    // Expose editor controls to parent
+    onEditorReady?: (controls: { undo: () => void; redo: () => void }) => void;
 }
 
 export function RichEditor({
@@ -136,8 +138,8 @@ export function RichEditor({
     onNoteSelect,
     conflictContent,    // New Prop
     onResolveConflict,  // New Prop
+    onEditorReady,      // Expose undo/redo
 }: RichEditorProps) {
-    const [isSaving, setIsSaving] = useState(false);
     const isProgrammaticUpdate = useRef(false);
 
     // Link modal state
@@ -149,6 +151,10 @@ export function RichEditor({
     // Color picker modal states
     const [showTextColorModal, setShowTextColorModal] = useState(false);
     const [showHighlightModal, setShowHighlightModal] = useState(false);
+
+    // Table menu state
+    const [showTableMenu, setShowTableMenu] = useState(false);
+    const [tableCellPosition, setTableCellPosition] = useState<{ top: number; right: number } | null>(null);
 
     // Predefined color palette
     const colorPalette = [
@@ -341,6 +347,71 @@ export function RichEditor({
         }
     }, [content, editor]);
 
+    // Expose undo/redo to parent component
+    useEffect(() => {
+        if (editor && onEditorReady) {
+            onEditorReady({
+                undo: () => editor.chain().focus().undo().run(),
+                redo: () => editor.chain().focus().redo().run(),
+            });
+        }
+    }, [editor, onEditorReady]);
+
+    // Track selected cell position for table menu
+    useEffect(() => {
+        if (!editor) return;
+
+        const updateCellPosition = () => {
+            if (editor.isActive('table')) {
+                // Method 1: Find selected cells (multi-select)
+                const selectedCell = document.querySelector('.ProseMirror .selectedCell') as HTMLElement;
+                if (selectedCell) {
+                    const rect = selectedCell.getBoundingClientRect();
+                    setTableCellPosition({
+                        top: rect.top + 4,
+                        right: window.innerWidth - rect.right + 4,
+                    });
+                    return;
+                }
+
+                // Method 2: Find cell containing cursor using DOM selection
+                const selection = window.getSelection();
+                if (selection && selection.anchorNode) {
+                    let node: Node | null = selection.anchorNode;
+                    // Walk up the DOM tree to find td or th
+                    while (node && node !== document.body) {
+                        if (node instanceof HTMLElement && (node.tagName === 'TD' || node.tagName === 'TH')) {
+                            const rect = node.getBoundingClientRect();
+                            setTableCellPosition({
+                                top: rect.top + 4,
+                                right: window.innerWidth - rect.right + 4,
+                            });
+                            return;
+                        }
+                        node = node.parentNode;
+                    }
+                }
+            }
+            setTableCellPosition(null);
+        };
+
+        // Update on selection change
+        editor.on('selectionUpdate', updateCellPosition);
+        editor.on('focus', updateCellPosition);
+
+        // Also listen to transaction for any changes
+        editor.on('transaction', updateCellPosition);
+
+        // Initial update
+        updateCellPosition();
+
+        return () => {
+            editor.off('selectionUpdate', updateCellPosition);
+            editor.off('focus', updateCellPosition);
+            editor.off('transaction', updateCellPosition);
+        };
+    }, [editor]);
+
     const fileInputRef = useRef<HTMLInputElement>(null);
 
     const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -515,6 +586,27 @@ export function RichEditor({
                         >
                             <Eraser size={16} />
                         </button>
+                        <button
+                            onClick={() => editor.chain().focus().toggleCode().run()}
+                            className={editor.isActive('code') ? 'is-active' : ''}
+                            title="Inline Code"
+                        >
+                            <Code size={16} />
+                        </button>
+                        <button
+                            onClick={() => editor.chain().focus().toggleSubscript().run()}
+                            className={editor.isActive('subscript') ? 'is-active' : ''}
+                            title="Subscript"
+                        >
+                            <SubIcon size={16} />
+                        </button>
+                        <button
+                            onClick={() => editor.chain().focus().toggleSuperscript().run()}
+                            className={editor.isActive('superscript') ? 'is-active' : ''}
+                            title="Superscript"
+                        >
+                            <SuperIcon size={16} />
+                        </button>
                     </div>
 
                     <div className="toolbar-separator" />
@@ -566,6 +658,13 @@ export function RichEditor({
                             title="Task List"
                         >
                             <CheckSquare size={16} />
+                        </button>
+                        <button
+                            onClick={() => editor.chain().focus().toggleBlockquote().run()}
+                            className={editor.isActive('blockquote') ? 'is-active' : ''}
+                            title="Block Quote"
+                        >
+                            <Quote size={16} />
                         </button>
                     </div>
 
@@ -633,34 +732,65 @@ export function RichEditor({
                         >
                             <TableIcon size={16} />
                         </button>
-                        {editor.isActive('table') && (
-                            <>
-                                <button
-                                    onClick={() => editor.chain().focus().addRowAfter().run()}
-                                    title="Add Row Below"
-                                >
-                                    <Plus size={14} /><RowsIcon size={14} />
-                                </button>
-                                <button
-                                    onClick={() => editor.chain().focus().deleteRow().run()}
-                                    title="Delete Row"
-                                >
-                                    <Trash2 size={14} /><RowsIcon size={14} />
-                                </button>
-                                <button
-                                    onClick={() => editor.chain().focus().addColumnAfter().run()}
-                                    title="Add Column Right"
-                                >
-                                    <Plus size={14} /><Columns size={14} />
-                                </button>
-                                <button
-                                    onClick={() => editor.chain().focus().deleteColumn().run()}
-                                    title="Delete Column"
-                                >
-                                    <Trash2 size={14} /><Columns size={14} />
-                                </button>
-                            </>
-                        )}
+                        {/* Row controls */}
+                        <button
+                            onClick={() => editor.chain().focus().addRowBefore().run()}
+                            disabled={!editor.can().addRowBefore()}
+                            title="Add Row Above"
+                            style={{ opacity: editor.can().addRowBefore() ? 1 : 0.3 }}
+                        >
+                            <RowsIcon size={14} />↑
+                        </button>
+                        <button
+                            onClick={() => editor.chain().focus().addRowAfter().run()}
+                            disabled={!editor.can().addRowAfter()}
+                            title="Add Row Below"
+                            style={{ opacity: editor.can().addRowAfter() ? 1 : 0.3 }}
+                        >
+                            <RowsIcon size={14} />↓
+                        </button>
+                        <button
+                            onClick={() => editor.chain().focus().deleteRow().run()}
+                            disabled={!editor.can().deleteRow()}
+                            title="Delete Row"
+                            style={{ opacity: editor.can().deleteRow() ? 1 : 0.3 }}
+                        >
+                            <Trash2 size={14} /><RowsIcon size={12} />
+                        </button>
+                        {/* Column controls */}
+                        <button
+                            onClick={() => editor.chain().focus().addColumnBefore().run()}
+                            disabled={!editor.can().addColumnBefore()}
+                            title="Add Column Left"
+                            style={{ opacity: editor.can().addColumnBefore() ? 1 : 0.3 }}
+                        >
+                            ←<Columns size={14} />
+                        </button>
+                        <button
+                            onClick={() => editor.chain().focus().addColumnAfter().run()}
+                            disabled={!editor.can().addColumnAfter()}
+                            title="Add Column Right"
+                            style={{ opacity: editor.can().addColumnAfter() ? 1 : 0.3 }}
+                        >
+                            <Columns size={14} />→
+                        </button>
+                        <button
+                            onClick={() => editor.chain().focus().deleteColumn().run()}
+                            disabled={!editor.can().deleteColumn()}
+                            title="Delete Column"
+                            style={{ opacity: editor.can().deleteColumn() ? 1 : 0.3 }}
+                        >
+                            <Trash2 size={14} /><Columns size={12} />
+                        </button>
+                        {/* Delete table */}
+                        <button
+                            onClick={() => editor.chain().focus().deleteTable().run()}
+                            disabled={!editor.can().deleteTable()}
+                            title="Delete Table"
+                            style={{ opacity: editor.can().deleteTable() ? 1 : 0.3, color: editor.can().deleteTable() ? 'var(--accent-red)' : undefined }}
+                        >
+                            <X size={14} /><TableIcon size={12} />
+                        </button>
                     </div>
 
                     <div className="toolbar-separator" />
@@ -698,16 +828,67 @@ export function RichEditor({
 
             <div className="rich-editor-content-wrapper">
                 <EditorContent editor={editor} className="rich-editor-content" />
+
+                {/* Table Cell Menu - 3-dots button on selected cells */}
+                {editor && editable && editor.isActive('table') && tableCellPosition && (
+                    <div
+                        className="table-cell-menu-trigger"
+                        style={{
+                            position: 'fixed',
+                            top: tableCellPosition.top,
+                            right: tableCellPosition.right,
+                            zIndex: 100,
+                        }}
+                    >
+                        <button
+                            className="table-dots-btn"
+                            onClick={() => setShowTableMenu(!showTableMenu)}
+                            title="Table options"
+                        >
+                            ⋮
+                        </button>
+                        {showTableMenu && (
+                            <div className="table-dropdown-menu">
+                                <div className="menu-section">
+                                    <span className="menu-label">Row</span>
+                                    <button onClick={() => { editor.chain().focus().addRowBefore().run(); setShowTableMenu(false); }}>
+                                        ↑ Add Above
+                                    </button>
+                                    <button onClick={() => { editor.chain().focus().addRowAfter().run(); setShowTableMenu(false); }}>
+                                        ↓ Add Below
+                                    </button>
+                                    <button className="danger" onClick={() => { editor.chain().focus().deleteRow().run(); setShowTableMenu(false); }}>
+                                        × Delete Row
+                                    </button>
+                                </div>
+                                <div className="menu-section">
+                                    <span className="menu-label">Column</span>
+                                    <button onClick={() => { editor.chain().focus().addColumnBefore().run(); setShowTableMenu(false); }}>
+                                        ← Add Left
+                                    </button>
+                                    <button onClick={() => { editor.chain().focus().addColumnAfter().run(); setShowTableMenu(false); }}>
+                                        → Add Right
+                                    </button>
+                                    <button className="danger" onClick={() => { editor.chain().focus().deleteColumn().run(); setShowTableMenu(false); }}>
+                                        × Delete Column
+                                    </button>
+                                </div>
+                                <div className="menu-section">
+                                    <button className="danger" onClick={() => { editor.chain().focus().deleteTable().run(); setShowTableMenu(false); }}>
+                                        × Delete Table
+                                    </button>
+                                </div>
+                            </div>
+                        )}
+                    </div>
+                )}
+
                 {editor.storage.characterCount && (
                     <div className="editor-status-bar">
                         {editor.storage.characterCount.characters()} characters
                     </div>
                 )}
             </div>
-
-            {isSaving && (
-                <div className="save-indicator">Saving...</div>
-            )}
 
             {/* Link Modal */}
             {showLinkModal && (
