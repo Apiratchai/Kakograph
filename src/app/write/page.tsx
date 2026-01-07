@@ -9,7 +9,7 @@ import { useEffect, useState, useCallback, useRef, useMemo } from 'react';
 import dynamic from 'next/dynamic';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/lib/auth/context';
-import { RichEditor } from '@/components/editor/rich-editor';
+import { BlockEditor } from '@/components/editor/DynamicBlockEditor';
 import { useNotes } from '@/lib/notes/hooks';
 import { RefreshCw, Wifi, Cloud, CloudOff, Lock, LockOpen, Settings, ChevronRight, Folder, Hash, List, Trash2, Check, Plus, Upload, Download, Search, X, Link as LinkIcon, AlertTriangle, ArrowRight, Loader2, Sparkles, Sun, Moon, Shield, Menu, ChevronLeft, Network, PenTool, FolderPlus, ChevronDown, Undo2, Redo2 } from 'lucide-react';
 import { useConvexConfig, SyncMode } from '@/lib/convex/provider';
@@ -40,8 +40,8 @@ const TableOfContents = ({ content }: { content: string }) => {
     }, [content]);
 
     const handleScroll = (text: string, level: number) => {
-        // TipTap editor content is typically contained in a class 'ProseMirror'
-        const editor = document.querySelector('.ProseMirror');
+        // Support both TipTap (.ProseMirror) and BlockNote (.bn-editor) editors
+        const editor = document.querySelector('.ProseMirror') || document.querySelector('.bn-editor');
         if (!editor) return;
 
         // Find all matching headers of that level
@@ -1390,11 +1390,11 @@ export default function WritePage() {
                 <main className="write-main relative flex overflow-hidden">
                     {/* Column 1: Editor */}
                     <div className="flex-1 h-full overflow-y-auto relative scrollbar-thin scrollbar-thumb-slate-700 scrollbar-track-transparent">
-                        <RichEditor
+                        <BlockEditor
                             content={content}
                             onChange={handleContentChange}
                             onSave={handleSave}
-                            placeholder="Start writing..."
+                            placeholder="Start writing, or type '/' for commands..."
                             notes={notes}
                             onNoteSelect={selectNote}
                             className="bg-transparent min-h-full"

@@ -1,0 +1,374 @@
+/* BlockNote Editor Styles */
+
+/* Container */
+.block-editor {
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+    width: 100%;
+}
+
+.block-editor.readonly {
+    pointer-events: auto;
+}
+
+.block-editor.readonly .bn-editor {
+    cursor: default;
+}
+
+/* Override BlockNote's default styling to match our theme */
+.bn-container {
+    --bn-colors-editor-background: transparent !important;
+    --bn-colors-editor-text: var(--text-primary) !important;
+    --bn-colors-menu-background: var(--surface-elevated) !important;
+    --bn-colors-menu-text: var(--text-primary) !important;
+    --bn-colors-tooltip-background: var(--surface-elevated) !important;
+    --bn-colors-tooltip-text: var(--text-primary) !important;
+    --bn-colors-hovered-background: var(--hover-bg) !important;
+    --bn-colors-selected-background: rgba(59, 130, 246, 0.2) !important;
+    --bn-colors-highlighted-text: var(--accent-blue) !important;
+    --bn-colors-side-menu: var(--text-muted) !important;
+    --bn-colors-border: var(--border-primary) !important;
+    
+    /* Font */
+    --bn-font-family: var(--font-sans), -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif !important;
+}
+
+/* Editor content area */
+.block-editor-content {
+    padding: 1rem 2rem;
+    min-height: 100%;
+    font-size: 1rem;
+    line-height: 1.75;
+}
+
+/* Prose styling for content */
+.bn-editor {
+    color: var(--text-primary);
+    background: transparent;
+}
+
+.bn-editor [data-content-type="paragraph"] {
+    margin-bottom: 0.5rem;
+}
+
+/* Headings */
+.bn-editor [data-content-type="heading"][data-level="1"] {
+    font-size: 2rem;
+    font-weight: 700;
+    margin: 1.5rem 0 1rem 0;
+    letter-spacing: -0.02em;
+    color: var(--text-primary);
+}
+
+.bn-editor [data-content-type="heading"][data-level="2"] {
+    font-size: 1.5rem;
+    font-weight: 600;
+    margin: 1.25rem 0 0.75rem 0;
+    letter-spacing: -0.01em;
+    color: var(--text-primary);
+}
+
+.bn-editor [data-content-type="heading"][data-level="3"] {
+    font-size: 1.25rem;
+    font-weight: 600;
+    margin: 1rem 0 0.5rem 0;
+    color: var(--text-primary);
+}
+
+/* Lists */
+.bn-editor [data-content-type="bulletListItem"],
+.bn-editor [data-content-type="numberedListItem"] {
+    margin: 0.25rem 0;
+    padding-left: 0.5rem;
+}
+
+.bn-editor [data-content-type="checkListItem"] {
+    display: flex;
+    align-items: flex-start;
+    gap: 0.5rem;
+    margin: 0.25rem 0;
+}
+
+.bn-editor [data-content-type="checkListItem"] input[type="checkbox"] {
+    margin-top: 0.35rem;
+    width: 1rem;
+    height: 1rem;
+    border-radius: 4px;
+    border: 2px solid var(--border-primary);
+    background: transparent;
+    cursor: pointer;
+    accent-color: var(--accent-blue);
+}
+
+.bn-editor [data-content-type="checkListItem"] input[type="checkbox"]:checked {
+    background: var(--accent-blue);
+    border-color: var(--accent-blue);
+}
+
+/* Code blocks */
+.bn-editor [data-content-type="codeBlock"] {
+    background: var(--surface-secondary);
+    border: 1px solid var(--border-primary);
+    border-radius: 8px;
+    padding: 1rem;
+    margin: 1rem 0;
+    font-family: 'JetBrains Mono', 'Fira Code', 'SF Mono', Menlo, Monaco, Consolas, monospace;
+    font-size: 0.875rem;
+    line-height: 1.5;
+    overflow-x: auto;
+}
+
+.bn-editor [data-content-type="codeBlock"] code {
+    background: transparent;
+    padding: 0;
+    border-radius: 0;
+}
+
+/* Inline code */
+.bn-editor code {
+    background: var(--surface-secondary);
+    padding: 0.2em 0.4em;
+    border-radius: 4px;
+    font-family: 'JetBrains Mono', 'Fira Code', 'SF Mono', Menlo, Monaco, Consolas, monospace;
+    font-size: 0.875em;
+    color: var(--accent-pink, #ec4899);
+}
+
+/* Blockquotes */
+.bn-editor [data-content-type="quote"] {
+    border-left: 4px solid var(--accent-blue);
+    padding-left: 1rem;
+    margin: 1rem 0;
+    color: var(--text-secondary);
+    font-style: italic;
+}
+
+/* Tables */
+.bn-editor [data-content-type="table"] {
+    width: 100%;
+    margin: 1rem 0;
+    border-collapse: collapse;
+    overflow: hidden;
+    border-radius: 8px;
+    border: 1px solid var(--border-primary);
+}
+
+.bn-editor [data-content-type="table"] th,
+.bn-editor [data-content-type="table"] td {
+    border: 1px solid var(--border-primary);
+    padding: 0.75rem;
+    text-align: left;
+}
+
+.bn-editor [data-content-type="table"] th {
+    background: var(--surface-secondary);
+    font-weight: 600;
+}
+
+.bn-editor [data-content-type="table"] tr:hover td {
+    background: var(--hover-bg);
+}
+
+/* Images */
+.bn-editor [data-content-type="image"] {
+    margin: 1rem 0;
+    border-radius: 8px;
+    overflow: hidden;
+    max-width: 100%;
+}
+
+.bn-editor [data-content-type="image"] img {
+    display: block;
+    max-width: 100%;
+    height: auto;
+    border-radius: 8px;
+}
+
+/* Links */
+.bn-editor a {
+    color: var(--accent-blue);
+    text-decoration: underline;
+    text-underline-offset: 2px;
+    cursor: pointer;
+    transition: opacity 0.15s ease;
+}
+
+.bn-editor a:hover {
+    opacity: 0.8;
+}
+
+/* Wiki Links - custom styling */
+.wiki-link {
+    color: var(--accent-purple, #a855f7);
+    background: rgba(168, 85, 247, 0.1);
+    padding: 0.1em 0.4em;
+    border-radius: 4px;
+    text-decoration: none;
+    cursor: pointer;
+    transition: background-color 0.15s ease;
+}
+
+.wiki-link:hover {
+    background: rgba(168, 85, 247, 0.2);
+}
+
+/* Horizontal rule */
+.bn-editor [data-content-type="divider"] {
+    margin: 2rem 0;
+    border: none;
+    border-top: 1px solid var(--border-primary);
+}
+
+/* Placeholders */
+.bn-editor [data-placeholder]::before {
+    color: var(--text-muted);
+    opacity: 0.6;
+    font-style: italic;
+}
+
+/* Side menu (drag handle, add button) */
+.bn-side-menu {
+    opacity: 0;
+    transition: opacity 0.15s ease;
+}
+
+.bn-block-outer:hover .bn-side-menu,
+.bn-side-menu:hover {
+    opacity: 1;
+}
+
+/* Formatting toolbar */
+.bn-formatting-toolbar {
+    background: var(--surface-elevated) !important;
+    border: 1px solid var(--border-primary) !important;
+    border-radius: 8px !important;
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3) !important;
+}
+
+.bn-formatting-toolbar button {
+    color: var(--text-primary) !important;
+}
+
+.bn-formatting-toolbar button:hover {
+    background: var(--hover-bg) !important;
+}
+
+.bn-formatting-toolbar button[data-is-active="true"] {
+    background: rgba(59, 130, 246, 0.2) !important;
+    color: var(--accent-blue) !important;
+}
+
+/* Slash menu */
+.bn-suggestion-menu {
+    background: var(--surface-elevated) !important;
+    border: 1px solid var(--border-primary) !important;
+    border-radius: 8px !important;
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3) !important;
+    max-height: 300px;
+    overflow-y: auto;
+}
+
+.bn-suggestion-menu-item {
+    padding: 0.5rem 0.75rem !important;
+    color: var(--text-primary) !important;
+    border-radius: 4px !important;
+    margin: 2px 4px !important;
+}
+
+.bn-suggestion-menu-item:hover,
+.bn-suggestion-menu-item[data-is-selected="true"] {
+    background: var(--hover-bg) !important;
+}
+
+.bn-suggestion-menu-item-title {
+    font-weight: 500;
+}
+
+.bn-suggestion-menu-item-subtitle {
+    color: var(--text-muted) !important;
+    font-size: 0.75rem;
+}
+
+/* Link toolbar */
+.bn-link-toolbar {
+    background: var(--surface-elevated) !important;
+    border: 1px solid var(--border-primary) !important;
+    border-radius: 8px !important;
+}
+
+/* Image toolbar */
+.bn-image-toolbar {
+    background: var(--surface-elevated) !important;
+    border: 1px solid var(--border-primary) !important;
+    border-radius: 8px !important;
+}
+
+/* Table handles */
+.bn-table-handle {
+    background: var(--accent-blue) !important;
+}
+
+/* Selection */
+.bn-editor ::selection {
+    background: rgba(59, 130, 246, 0.3);
+}
+
+/* Dark theme overrides */
+[data-theme="dark"] .bn-container,
+.dark .bn-container {
+    --bn-colors-editor-background: transparent;
+}
+
+/* Light theme overrides */
+[data-theme="light"] .bn-container,
+.light .bn-container {
+    --bn-colors-editor-background: transparent;
+    --bn-colors-editor-text: var(--text-primary);
+}
+
+/* Responsive adjustments */
+@media (max-width: 768px) {
+    .block-editor-content {
+        padding: 0.75rem 1rem;
+    }
+    
+    .bn-side-menu {
+        opacity: 1;
+    }
+}
+
+/* Animation for block insertion */
+.bn-block-outer {
+    animation: blockFadeIn 0.15s ease-out;
+}
+
+@keyframes blockFadeIn {
+    from {
+        opacity: 0;
+        transform: translateY(-4px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+/* Scrollbar styling */
+.block-editor ::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+}
+
+.block-editor ::-webkit-scrollbar-track {
+    background: transparent;
+}
+
+.block-editor ::-webkit-scrollbar-thumb {
+    background: var(--border-primary);
+    border-radius: 4px;
+}
+
+.block-editor ::-webkit-scrollbar-thumb:hover {
+    background: var(--text-muted);
+}
