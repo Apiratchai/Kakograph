@@ -111,14 +111,16 @@
   flex: 1;
   display: flex;
   flex-direction: column;
-  max-width: 800px; /* Comfortable reading width */
-  margin: 0 auto; /* Center within the container */
+  max-width: 100%; /* Use full container width */
+  margin: 0 auto;
+  overflow-x: hidden; /* Prevent content from overflowing */
 }
 
 .write-main .rich-editor-content,
 .write-main .block-editor-content {
   flex: 1;
   overflow-y: auto;
+  overflow-x: hidden;
 }
 
 /* iOS safe area for main content */

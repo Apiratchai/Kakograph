@@ -166,16 +166,47 @@ export function BlockEditor({
     }, [editor, content, isReady]);
 
     // Handle content changes - convert back to HTML for compatibility
-    const handleChange = useCallback(async () => {
-        if (isProgrammaticUpdate.current || !editor) return;
+    const changeTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+    const isMountedRef = useRef(true);
 
-        try {
-            const html = await blocksToHtml(editor);
-            lastContentRef.current = html;
-            onChange?.(html);
-        } catch (error) {
-            console.error("Error converting blocks to HTML:", error);
+    // Cleanup on unmount
+    useEffect(() => {
+        isMountedRef.current = true;
+        return () => {
+            isMountedRef.current = false;
+            if (changeTimeoutRef.current) {
+                clearTimeout(changeTimeoutRef.current);
+            }
+        };
+    }, []);
+
+    const handleChange = useCallback(async () => {
+        if (isProgrammaticUpdate.current || !editor || !isMountedRef.current) return;
+
+        // Debounce changes to prevent rapid firing which can cause table index errors
+        if (changeTimeoutRef.current) {
+            clearTimeout(changeTimeoutRef.current);
         }
+
+        changeTimeoutRef.current = setTimeout(async () => {
+            // Double-check we're still mounted
+            if (!isMountedRef.current) return;
+
+            try {
+                const html = await blocksToHtml(editor);
+                if (html !== lastContentRef.current && isMountedRef.current) {
+                    lastContentRef.current = html;
+                    onChange?.(html);
+                }
+            } catch (error) {
+                // Silently ignore BlockNote internal errors
+                if (error instanceof RangeError || error instanceof TypeError) {
+                    console.debug("BlockNote error (ignored):", (error as Error).message);
+                    return;
+                }
+                console.error("Error converting blocks to HTML:", error);
+            }
+        }, 100); // 100ms debounce
     }, [editor, onChange]);
 
     // Keyboard shortcuts

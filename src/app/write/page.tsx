@@ -1407,7 +1407,7 @@ export default function WritePage() {
                 {/* Main Content Area */}
                 <main className="write-main relative flex overflow-hidden">
                     {/* Column 1: Editor */}
-                    <div className="flex-1 h-full overflow-y-auto relative scrollbar-thin scrollbar-thumb-slate-700 scrollbar-track-transparent">
+                    <div className="flex-1 h-full overflow-y-auto overflow-x-hidden relative scrollbar-thin scrollbar-thumb-slate-700 scrollbar-track-transparent">
                         <BlockEditor
                             key={currentNote?.id || 'new-note'}
                             content={currentNote?.content ?? content}
