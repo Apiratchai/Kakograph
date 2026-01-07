@@ -9,7 +9,7 @@ import { useEffect, useState, useCallback, useRef, useMemo } from 'react';
 import dynamic from 'next/dynamic';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/lib/auth/context';
-import { RichEditor } from '@/components/editor/rich-editor';
+import { BlockEditor } from '@/components/editor/DynamicBlockEditor';
 import { useNotes } from '@/lib/notes/hooks';
 import { RefreshCw, Wifi, Cloud, CloudOff, Lock, LockOpen, Settings, ChevronRight, Folder, Hash, List, Trash2, Check, Plus, Upload, Download, Search, X, Link as LinkIcon, AlertTriangle, ArrowRight, Loader2, Sparkles, Sun, Moon, Shield, Menu, ChevronLeft, Network, PenTool, FolderPlus, ChevronDown, Undo2, Redo2 } from 'lucide-react';
 import { useConvexConfig, SyncMode } from '@/lib/convex/provider';
@@ -40,8 +40,8 @@ const TableOfContents = ({ content }: { content: string }) => {
     }, [content]);
 
     const handleScroll = (text: string, level: number) => {
-        // TipTap editor content is typically contained in a class 'ProseMirror'
-        const editor = document.querySelector('.ProseMirror');
+        // Support both TipTap (.ProseMirror) and BlockNote (.bn-editor) editors
+        const editor = document.querySelector('.ProseMirror') || document.querySelector('.bn-editor');
         if (!editor) return;
 
         // Find all matching headers of that level
@@ -360,6 +360,12 @@ export default function WritePage() {
             updateNoteLocal(newContent);
         }, 150); // 150ms delay for title update
 
+        // SKIP auto-save if we're in conflict resolution mode
+        // User must explicitly click "Resolve & Save" button
+        if (currentNote?.conflictContent) {
+            return;
+        }
+
         // Clear existing save timeout
         if (saveTimeoutRef.current) {
             clearTimeout(saveTimeoutRef.current);
@@ -372,7 +378,7 @@ export default function WritePage() {
                 setLastSaved(new Date());
             }
         }, 1000);
-    }, [saveNote, updateNoteLocal]);
+    }, [saveNote, updateNoteLocal, currentNote?.conflictContent]);
 
     // Manual save
     const handleSave = useCallback(async () => {
@@ -1299,6 +1305,18 @@ export default function WritePage() {
                                         Export Backup
                                     </button>
 
+                                    {/* Import */}
+                                    <button
+                                        onClick={() => { handleImportTrigger(); setShowSettingsMenu(false); }}
+                                        className="w-full px-4 py-2 text-left text-sm flex items-center gap-3 transition-colors"
+                                        style={{ color: 'var(--text-primary)' }}
+                                        onMouseEnter={e => e.currentTarget.style.backgroundColor = 'var(--hover-bg)'}
+                                        onMouseLeave={e => e.currentTarget.style.backgroundColor = 'transparent'}
+                                    >
+                                        <Upload size={16} />
+                                        Import Backup
+                                    </button>
+
                                     {/* Sync Settings */}
                                     <button
                                         onClick={() => { setShowSyncSettings(true); setShowSettingsMenu(false); }}
@@ -1389,12 +1407,13 @@ export default function WritePage() {
                 {/* Main Content Area */}
                 <main className="write-main relative flex overflow-hidden">
                     {/* Column 1: Editor */}
-                    <div className="flex-1 h-full overflow-y-auto relative scrollbar-thin scrollbar-thumb-slate-700 scrollbar-track-transparent">
-                        <RichEditor
-                            content={content}
+                    <div className="flex-1 h-full overflow-y-auto overflow-x-hidden relative scrollbar-thin scrollbar-thumb-slate-700 scrollbar-track-transparent">
+                        <BlockEditor
+                            key={currentNote?.id || 'new-note'}
+                            content={currentNote?.content ?? content}
                             onChange={handleContentChange}
                             onSave={handleSave}
-                            placeholder="Start writing..."
+                            placeholder="Start writing, or type '/' for commands..."
                             notes={notes}
                             onNoteSelect={selectNote}
                             className="bg-transparent min-h-full"
