@@ -122,16 +122,20 @@ export function BlockEditor({
         },
     });
 
-    // Initialize content from HTML
-    useEffect(() => {
-        if (!editor || !content) return;
+    // Initialize content from HTML on first load
+    const hasInitialized = useRef(false);
 
-        // Only set content on initial load or if content changed externally
-        if (lastContentRef.current !== content && !editor.isFocused) {
+    useEffect(() => {
+        if (!editor) return;
+
+        // First-time initialization
+        if (!hasInitialized.current && content) {
+            hasInitialized.current = true;
             isProgrammaticUpdate.current = true;
 
             htmlToBlocks(editor, content).then((blocks) => {
                 editor.replaceBlocks(editor.document, blocks);
+                lastContentRef.current = content;
                 isProgrammaticUpdate.current = false;
                 setIsReady(true);
             }).catch((error) => {
@@ -139,9 +143,24 @@ export function BlockEditor({
                 isProgrammaticUpdate.current = false;
                 setIsReady(true);
             });
+            return;
+        }
 
-            lastContentRef.current = content;
-        } else if (!isReady) {
+        // Subsequent updates - only update if content changed externally and editor not focused
+        if (hasInitialized.current && content !== lastContentRef.current && !editor.isFocused) {
+            isProgrammaticUpdate.current = true;
+
+            htmlToBlocks(editor, content).then((blocks) => {
+                editor.replaceBlocks(editor.document, blocks);
+                lastContentRef.current = content;
+                isProgrammaticUpdate.current = false;
+            }).catch((error) => {
+                console.error("Failed to update editor content:", error);
+                isProgrammaticUpdate.current = false;
+            });
+        }
+
+        if (!isReady) {
             setIsReady(true);
         }
     }, [editor, content, isReady]);

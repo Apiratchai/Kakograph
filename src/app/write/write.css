@@ -90,13 +90,33 @@
   overflow: hidden;
 }
 
-.write-main .rich-editor {
+/* Center the editor content on PC when left sidebar is collapsed */
+/* Add left padding equivalent to sidebar width to center the writing area */
+@media (min-width: 1024px) {
+  .write-main > div:first-child {
+    /* Editor container - add left padding to balance with right sidebar */
+    padding-left: 280px; /* Same as sidebar width */
+  }
+}
+
+/* On very large screens, can add more centering */
+@media (min-width: 1600px) {
+  .write-main > div:first-child {
+    padding-left: 320px;
+  }
+}
+
+.write-main .rich-editor,
+.write-main .block-editor {
   flex: 1;
   display: flex;
   flex-direction: column;
+  max-width: 800px; /* Comfortable reading width */
+  margin: 0 auto; /* Center within the container */
 }
 
-.write-main .rich-editor-content {
+.write-main .rich-editor-content,
+.write-main .block-editor-content {
   flex: 1;
   overflow-y: auto;
 }

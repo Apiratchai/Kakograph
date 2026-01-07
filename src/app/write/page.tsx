@@ -360,6 +360,12 @@ export default function WritePage() {
             updateNoteLocal(newContent);
         }, 150); // 150ms delay for title update
 
+        // SKIP auto-save if we're in conflict resolution mode
+        // User must explicitly click "Resolve & Save" button
+        if (currentNote?.conflictContent) {
+            return;
+        }
+
         // Clear existing save timeout
         if (saveTimeoutRef.current) {
             clearTimeout(saveTimeoutRef.current);
@@ -372,7 +378,7 @@ export default function WritePage() {
                 setLastSaved(new Date());
             }
         }, 1000);
-    }, [saveNote, updateNoteLocal]);
+    }, [saveNote, updateNoteLocal, currentNote?.conflictContent]);
 
     // Manual save
     const handleSave = useCallback(async () => {
@@ -1299,6 +1305,18 @@ export default function WritePage() {
                                         Export Backup
                                     </button>
 
+                                    {/* Import */}
+                                    <button
+                                        onClick={() => { handleImportTrigger(); setShowSettingsMenu(false); }}
+                                        className="w-full px-4 py-2 text-left text-sm flex items-center gap-3 transition-colors"
+                                        style={{ color: 'var(--text-primary)' }}
+                                        onMouseEnter={e => e.currentTarget.style.backgroundColor = 'var(--hover-bg)'}
+                                        onMouseLeave={e => e.currentTarget.style.backgroundColor = 'transparent'}
+                                    >
+                                        <Upload size={16} />
+                                        Import Backup
+                                    </button>
+
                                     {/* Sync Settings */}
                                     <button
                                         onClick={() => { setShowSyncSettings(true); setShowSettingsMenu(false); }}
@@ -1391,7 +1409,8 @@ export default function WritePage() {
                     {/* Column 1: Editor */}
                     <div className="flex-1 h-full overflow-y-auto relative scrollbar-thin scrollbar-thumb-slate-700 scrollbar-track-transparent">
                         <BlockEditor
-                            content={content}
+                            key={currentNote?.id || 'new-note'}
+                            content={currentNote?.content ?? content}
                             onChange={handleContentChange}
                             onSave={handleSave}
                             placeholder="Start writing, or type '/' for commands..."
