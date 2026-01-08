@@ -1416,6 +1416,12 @@ export default function WritePage() {
                             placeholder="Start writing, or type '/' for commands..."
                             notes={notes}
                             onNoteSelect={selectNote}
+                            // Create new note in root folder (no folder specified)
+                            // Pass switchToNote=false to stay on current note when creating via wiki link
+                            onCreateNote={async (title) => {
+                                const newNoteId = await createNewNote(undefined, title, false);
+                                return newNoteId;
+                            }}
                             className="bg-transparent min-h-full"
                             showToolbar={viewMode === 'editor'}
                             // Pass Conflict Props

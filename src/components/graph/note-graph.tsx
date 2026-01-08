@@ -102,14 +102,14 @@ export default function NoteGraph({ notes, onNodeClick, onNodeHover, highlighted
 
             // Create a node object. If it existed before, preserve its layout properties.
             const node = {
+                // Preserve layout if available
+                ...(existingNode || {}),
                 id: n.id,
                 name: title,
                 val: 1,
                 color: '#3b82f6',
                 group: 0,
                 tags: [] as string[],
-                // Preserve layout if available
-                ...(existingNode || {})
             };
 
             // Update the map for next time

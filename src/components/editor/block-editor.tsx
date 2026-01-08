@@ -12,15 +12,59 @@ import "./block-editor.css";
 import {
     BlockNoteEditor,
     PartialBlock,
+    BlockNoteSchema,
+    defaultInlineContentSpecs,
+    createInlineContentSpec,
 } from "@blocknote/core";
 import {
     useCreateBlockNote,
-    SuggestionMenuController,
-    getDefaultReactSlashMenuItems,
+    DefaultReactSuggestionItem,
+    createReactInlineContentSpec,
 } from "@blocknote/react";
 import { BlockNoteView } from "@blocknote/mantine";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, createContext, useContext } from "react";
 import { compressImage } from "@/lib/image-utils";
+import { FileText, Plus } from "lucide-react";
+
+// Context to provide live note titles
+const NoteTitleContext = createContext<Record<string, string>>({});
+
+// Custom inline content spec for Wiki Links
+const WikiLink = createReactInlineContentSpec(
+    {
+        type: "wikiLink",
+        propSchema: {
+            noteId: { default: "" },
+            noteTitle: { default: "" },
+        },
+        content: "none",
+    },
+    {
+        render: (props) => {
+            const titles = useContext(NoteTitleContext);
+            const title = titles[props.inlineContent.props.noteId] || props.inlineContent.props.noteTitle;
+            return (
+                <span
+                    className="wiki-link"
+                    data-id={props.inlineContent.props.noteId}
+                >
+                    {title}
+                </span>
+            );
+        },
+    }
+);
+
+// Create custom schema with wiki links
+const schema = BlockNoteSchema.create({
+    inlineContentSpecs: {
+        ...defaultInlineContentSpecs,
+        wikiLink: WikiLink,
+    },
+});
+
+// Type for our custom editor
+type CustomBlockNoteEditor = typeof schema.BlockNoteEditor;
 
 // Props interface matching the TipTap RichEditor for drop-in replacement
 interface BlockEditorProps {
@@ -33,6 +77,8 @@ interface BlockEditorProps {
     showToolbar?: boolean;
     notes?: Array<{ id: string; title: string }>;
     onNoteSelect?: (id: string) => void;
+    // NEW: Callback to create a new note with a given title, returns the new note ID
+    onCreateNote?: (title: string) => Promise<string | undefined>;
     // Conflict Resolution Props
     conflictContent?: string;
     onResolveConflict?: () => void;
@@ -41,8 +87,9 @@ interface BlockEditorProps {
 }
 
 // Helper: Convert HTML to BlockNote blocks
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 async function htmlToBlocks(
-    editor: BlockNoteEditor,
+    editor: any,
     html: string
 ): Promise<PartialBlock[]> {
     if (!html || html.trim() === '' || html === '<p></p>') {
@@ -60,13 +107,74 @@ async function htmlToBlocks(
 }
 
 // Helper: Convert BlockNote blocks to HTML
-async function blocksToHtml(editor: BlockNoteEditor): Promise<string> {
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+async function blocksToHtml(editor: any): Promise<string> {
     try {
         return await editor.blocksToHTMLLossy(editor.document);
     } catch (error) {
         console.warn("Failed to convert blocks to HTML:", error);
         return "";
     }
+}
+
+import { WikiLinkController } from "./WikiLinkController";
+
+// Wiki Link item type for our custom data
+export type WikiLinkData = {
+    noteId: string;
+    noteTitle: string;
+    isCreateNew?: boolean;
+};
+
+// Custom Wiki Link Suggestion Menu Component
+export function WikiLinkSuggestionMenu({
+    items,
+    selectedIndex,
+    onItemClick,
+}: {
+    items: Array<DefaultReactSuggestionItem & { data?: WikiLinkData }>;
+    selectedIndex: number;
+    onItemClick?: (item: DefaultReactSuggestionItem & { data?: WikiLinkData }) => void;
+}) {
+    if (items.length === 0) {
+        return (
+            <div
+                className="wiki-link-menu bg-slate-800 border border-slate-700 rounded-lg shadow-xl overflow-hidden p-2 text-xs text-slate-400"
+                onMouseDown={(e) => e.preventDefault()}
+                tabIndex={0}
+            >
+                Start typing to search or create a note
+            </div>
+        );
+    }
+
+    return (
+        <div
+            className="wiki-link-menu bg-slate-800 border border-slate-700 rounded-lg shadow-xl overflow-hidden flex flex-col min-w-[200px] max-h-[300px] overflow-y-auto"
+            onMouseDown={(e) => e.preventDefault()}
+            tabIndex={0}
+        >
+            {items.map((item, index) => (
+                <button
+                    key={item.data?.noteId || item.title}
+                    className={`flex items-center gap-2 px-3 py-2 text-sm text-left transition-colors ${index === selectedIndex
+                        ? 'bg-blue-600 text-white'
+                        : 'text-slate-200 hover:bg-slate-700'
+                        }`}
+                    onClick={() => onItemClick?.(item)}
+                >
+                    {item.data?.isCreateNew ? (
+                        <Plus size={14} className={index === selectedIndex ? 'text-white' : 'text-green-400'} />
+                    ) : (
+                        <FileText size={14} className={index === selectedIndex ? 'text-white' : 'text-slate-400'} />
+                    )}
+                    <span className="truncate">
+                        {item.data?.isCreateNew ? `Create "${item.data.noteTitle}"` : (item.data?.noteTitle || item.title)}
+                    </span>
+                </button>
+            ))}
+        </div>
+    );
 }
 
 export function BlockEditor({
@@ -79,6 +187,7 @@ export function BlockEditor({
     showToolbar = true,
     notes = [],
     onNoteSelect,
+    onCreateNote,
     conflictContent,
     onResolveConflict,
     onEditorReady,
@@ -92,6 +201,90 @@ export function BlockEditor({
     useEffect(() => {
         notesRef.current = notes;
     }, [notes]);
+
+    // Memoize title map for dynamic wiki link titles
+    const titleMap = useMemo(() => {
+        const map: Record<string, string> = {};
+        notes?.forEach(n => map[n.id] = n.title);
+        return map;
+    }, [notes]);
+
+    // Track callbacks in refs to avoid re-creating suggestion menu
+    const onNoteSelectRef = useRef(onNoteSelect);
+    const onCreateNoteRef = useRef(onCreateNote);
+    useEffect(() => {
+        onNoteSelectRef.current = onNoteSelect;
+        onCreateNoteRef.current = onCreateNote;
+    }, [onNoteSelect, onCreateNote]);
+
+    // Get wiki link suggestion items based on query
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const getWikiLinkItems = useCallback(async (query: string, editorInstance: any): Promise<Array<DefaultReactSuggestionItem & { data?: WikiLinkData }>> => {
+        const currentNotes = notesRef.current;
+        const lowerQuery = query.toLowerCase().trim();
+
+        // Filter notes by title
+        const filteredNotes: Array<DefaultReactSuggestionItem & { data?: WikiLinkData }> = currentNotes
+            .filter(note => note.title.toLowerCase().includes(lowerQuery))
+            .slice(0, 8)
+            .map(note => ({
+                title: note.title,
+                onItemClick: () => {
+                    // Insert proper wiki link inline content with data-id for graph and click handling
+                    editorInstance.insertInlineContent([
+                        {
+                            type: "wikiLink",
+                            props: {
+                                noteId: note.id,
+                                noteTitle: note.title,
+                            },
+                        },
+                    ]);
+                },
+                data: {
+                    noteId: note.id,
+                    noteTitle: note.title,
+                },
+            }));
+
+        // Add "Create new" option if:
+        // 1. Query is not empty
+        // 2. No exact match exists
+        const hasExactMatch = currentNotes.some(
+            note => note.title.toLowerCase() === lowerQuery
+        );
+
+        if (query.trim() && !hasExactMatch && onCreateNoteRef.current) {
+            const noteTitle = query.trim();
+            filteredNotes.push({
+                title: `Create "${noteTitle}"`,
+                onItemClick: async () => {
+                    // Create the note first to get its ID
+                    let newNoteId: string | undefined;
+                    if (onCreateNoteRef.current) {
+                        newNoteId = await onCreateNoteRef.current(noteTitle);
+                    }
+                    // Insert proper wiki link with the new note's ID if available
+                    editorInstance.insertInlineContent([
+                        {
+                            type: "wikiLink",
+                            props: {
+                                noteId: newNoteId || '',
+                                noteTitle: noteTitle,
+                            },
+                        },
+                    ]);
+                },
+                data: {
+                    noteId: '__create_new__',
+                    noteTitle: noteTitle,
+                    isCreateNew: true,
+                },
+            });
+        }
+
+        return filteredNotes;
+    }, []);
 
     // Custom upload handler for images
     const handleUpload = useCallback(async (file: File): Promise<string> => {
@@ -112,8 +305,9 @@ export function BlockEditor({
         });
     }, []);
 
-    // Create editor instance
+    // Create editor instance with custom schema for wiki links
     const editor = useCreateBlockNote({
+        schema,
         uploadFile: handleUpload,
         domAttributes: {
             editor: {
@@ -294,12 +488,14 @@ export function BlockEditor({
                             YOUR VERSION (EDIT HERE)
                         </div>
                         <div className="flex-1 overflow-y-auto">
-                            <BlockNoteView
-                                editor={editor}
-                                onChange={handleChange}
-                                editable={editable}
-                                theme="dark"
-                            />
+                            <NoteTitleContext.Provider value={titleMap}>
+                                <BlockNoteView
+                                    editor={editor}
+                                    onChange={handleChange}
+                                    editable={editable}
+                                    theme="dark"
+                                />
+                            </NoteTitleContext.Provider>
                         </div>
                     </div>
 
@@ -320,14 +516,22 @@ export function BlockEditor({
     // Normal editor mode
     return (
         <div className={`block-editor ${className} ${!editable ? 'readonly' : ''}`}>
-            <BlockNoteView
-                editor={editor}
-                onChange={handleChange}
-                editable={editable}
-                theme="dark"
-                slashMenu={showToolbar}
-                formattingToolbar={showToolbar}
-            />
+            <NoteTitleContext.Provider value={titleMap}>
+                <BlockNoteView
+                    editor={editor}
+                    onChange={handleChange}
+                    editable={editable}
+                    theme="dark"
+                    slashMenu={showToolbar}
+                    formattingToolbar={showToolbar}
+                >
+                    {/* Wiki Link Controller for [[ trigger */}
+                    <WikiLinkController
+                        editor={editor}
+                        getItems={getWikiLinkItems}
+                    />
+                </BlockNoteView>
+            </NoteTitleContext.Provider>
         </div>
     );
 }
