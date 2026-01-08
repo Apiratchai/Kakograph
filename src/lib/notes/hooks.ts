@@ -339,11 +339,13 @@ export function useNotes() {
     );
 
     // -- Note Operations --
-    const createNewNote = useCallback(async (initialFolder?: string) => {
-        if (!encryptionKey || !seedId) return;
+    // switchToNote: if false, creates the note but doesn't switch to it (used for wiki link creation)
+    const createNewNote = useCallback(async (initialFolder?: string, initialTitle?: string, switchToNote: boolean = true): Promise<string | undefined> => {
+        if (!encryptionKey || !seedId) return undefined;
 
-        const content = '';
-        const title = 'Untitled';
+        const title = initialTitle || 'Untitled';
+        // If title is provided, set initial content with the title as H1
+        const content = initialTitle ? `<h1>${initialTitle}</h1><p></p>` : '';
         const now = Date.now();
         const contentHash = await hashContent(content);
 
@@ -362,8 +364,9 @@ export function useNotes() {
 
             const [encryptedContent, encryptedTitle, encryptedFolder] = await Promise.all(promises);
 
+            const newNoteId = createNoteId();
             const encryptedNote: EncryptedNote = {
-                id: createNoteId(),
+                id: newNoteId,
                 seedId,
                 encryptedContent,
                 encryptedTitle,
@@ -392,7 +395,8 @@ export function useNotes() {
             setState((prev) => ({
                 ...prev,
                 notes: [decryptedNote, ...prev.notes],
-                currentNote: decryptedNote,
+                // Only switch to new note if switchToNote is true
+                currentNote: switchToNote ? decryptedNote : prev.currentNote,
             }));
 
             // Refresh from DB
@@ -406,8 +410,11 @@ export function useNotes() {
                     console.warn('[Hooks] Initial note push delayed, background sync will retry', err);
                 }
             }
+
+            return newNoteId;
         } catch (err) {
             console.error('Failed to create new note:', err);
+            return undefined;
         }
     }, [encryptionKey, seedId, storage, loadNotes, syncService]);
 
