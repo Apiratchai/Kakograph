@@ -1,0 +1,30 @@
+version: '3.8'
+
+services:
+  # 1. The Kakograph App (Frontend)
+  kakograph:
+    build: .
+    container_name: kakograph-app
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    environment:
+      # This points to the backend. Since this is client-side code running in the browser,
+      # it must be accessible from the browser's perspective.
+      # If running locally, localhost:3210 works.
+      # If running on a VPS, use your domain/IP: http://your-ip:3210
+      - NEXT_PUBLIC_CONVEX_URL=http://localhost:3210
+
+  # 2. The Database (Convex Backend)
+  convex:
+    image: convexinc/convex-backend:latest
+    container_name: kakograph-backend
+    restart: unless-stopped
+    ports:
+      - "3210:3210"
+      - "3211:3211"
+    volumes:
+      - convex_data:/var/lib/convex
+
+volumes:
+  convex_data:

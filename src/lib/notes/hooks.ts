@@ -131,11 +131,6 @@ export function useNotes() {
                         } catch (e) {
                             console.warn(`Failed to decrypt folder for note ${note.id}`, e);
                         }
-                        try {
-                            folder = await decryptText(note.encryptedFolder, encryptionKey);
-                        } catch (e) {
-                            console.warn(`Failed to decrypt folder for note ${note.id}`, e);
-                        }
                     } else if ((note as any).folder) {
                         // Legacy support during migration
                         folder = (note as any).folder;
@@ -182,11 +177,10 @@ export function useNotes() {
                 ...prev,
                 notes: decryptedNotes,
                 trash: decryptedTrash,
-                encryptedNotes, // Update encrypted notes for sync
+                encryptedNotes,
                 isLoading: false,
-                // Update current note with new version if it exists
                 currentNote: prev.currentNote
-                    ? decryptedNotes.find(n => n.id === prev.currentNote!.id) || null
+                    ? (decryptedNotes.find(n => n.id === prev.currentNote!.id) || prev.currentNote)
                     : (!silent ? decryptedNotes[0] || null : null),
                 trashCount: decryptedTrash.length,
             }));
@@ -282,7 +276,10 @@ export function useNotes() {
                 return {
                     ...prev,
                     notes: newNotes,
-                    currentNote: { ...decryptedNote, conflictContent: undefined }, // Ensure conflict UI clears
+                    // Only update currentNote if it matches the one we just saved
+                    currentNote: prev.currentNote?.id === decryptedNote.id
+                        ? { ...decryptedNote, conflictContent: undefined }
+                        : prev.currentNote,
                     isSaving: false,
                 };
             });
@@ -399,16 +396,14 @@ export function useNotes() {
                 currentNote: switchToNote ? decryptedNote : prev.currentNote,
             }));
 
-            // Refresh from DB
-            await loadNotes(true);
+            // Refresh from DB in background (don't await to prevent race conditions)
+            loadNotes(true).catch(err => console.error('[Hooks] Background loadNotes failed:', err));
 
-            // Proactively push initial note to cloud if online
+            // Proactively push initial note to cloud if online in background
             if (syncService.isEnabled) {
-                try {
-                    await syncService.pushNote(encryptedNote);
-                } catch (err) {
+                syncService.pushNote(encryptedNote).catch(err => {
                     console.warn('[Hooks] Initial note push delayed, background sync will retry', err);
-                }
+                });
             }
 
             return newNoteId;
@@ -686,6 +681,22 @@ export function useNotes() {
         }
     }, [storage, seedId]);
 
+    // Secure Export
+    const exportEncryptedBackup = useCallback(async (): Promise<Blob> => {
+        return await storage.exportAll();
+    }, [storage]);
+
+    // Secure Import
+    const importEncryptedBackup = useCallback(async (data: Blob): Promise<void> => {
+        // Clear existing data first? Or merge?
+        // The implementation in indexeddb-provider uses bulkPut which overwrites by ID.
+        // For a full restore, we might want to clear first, but bulkPut is safer for merging.
+        // However, usually backups imply "restore state".
+        // Let's stick to storage.importAll implementation.
+        await storage.importAll(data);
+        await loadNotes(true);
+    }, [storage, loadNotes]);
+
 
     // Override saveNote to push to sync
     // ... we already refactored saveNote below, but let's keep the flow.
@@ -785,7 +796,6 @@ export function useNotes() {
             if (syncService.isEnabled) {
                 try {
                     await syncService.pushNote(encryptedNote);
-                    console.log('[Hooks] Cloud sync successful');
                 } catch (err) {
                     console.warn('[Hooks] Cloud push delayed, will retry in background:', err);
                 }
@@ -913,6 +923,8 @@ export function useNotes() {
         moveNote: moveNoteWithSync,
         updateNoteLocal,
         clearAllNotes, // For full snapshot restore
-        wipeLocalData: clearAllNotes // Exposed for UI "Clear Local Data"
+        wipeLocalData: clearAllNotes, // Exposed for UI "Clear Local Data"
+        exportEncryptedBackup,
+        importEncryptedBackup
     };
 }
