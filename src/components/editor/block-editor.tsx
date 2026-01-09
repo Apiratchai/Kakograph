@@ -14,7 +14,6 @@ import {
     PartialBlock,
     BlockNoteSchema,
     defaultInlineContentSpecs,
-    createInlineContentSpec,
 } from "@blocknote/core";
 import {
     useCreateBlockNote,
@@ -26,8 +25,11 @@ import { useCallback, useEffect, useMemo, useRef, useState, createContext, useCo
 import { compressImage } from "@/lib/image-utils";
 import { FileText, Plus } from "lucide-react";
 
-// Context to provide live note titles
-const NoteTitleContext = createContext<Record<string, string>>({});
+// Context to provide live note titles and resolution
+const NoteTitleContext = createContext<{
+    idToTitle: Record<string, string>;
+    titleToId: Record<string, string>;
+}>({ idToTitle: {}, titleToId: {} });
 
 // Custom inline content spec for Wiki Links
 const WikiLink = createReactInlineContentSpec(
@@ -41,12 +43,20 @@ const WikiLink = createReactInlineContentSpec(
     },
     {
         render: (props) => {
-            const titles = useContext(NoteTitleContext);
-            const title = titles[props.inlineContent.props.noteId] || props.inlineContent.props.noteTitle;
+            const { idToTitle, titleToId } = useContext(NoteTitleContext);
+            const noteId = props.inlineContent.props.noteId;
+            const noteTitle = props.inlineContent.props.noteTitle;
+
+            // A note exists if either its ID is valid OR a note with its exact title exists
+            const resolvedId = idToTitle[noteId] ? noteId : titleToId[noteTitle];
+            const exists = !!resolvedId;
+            const title = idToTitle[noteId] || noteTitle;
+
             return (
                 <span
                     className="wiki-link"
-                    data-id={props.inlineContent.props.noteId}
+                    data-id={resolvedId || noteId}
+                    data-is-unresolved={!exists}
                 >
                     {title}
                 </span>
@@ -78,7 +88,7 @@ interface BlockEditorProps {
     notes?: Array<{ id: string; title: string }>;
     onNoteSelect?: (id: string) => void;
     // NEW: Callback to create a new note with a given title, returns the new note ID
-    onCreateNote?: (title: string) => Promise<string | undefined>;
+    onCreateNote?: (title: string, switchToNote?: boolean) => Promise<string | undefined>;
     // Conflict Resolution Props
     conflictContent?: string;
     onResolveConflict?: () => void;
@@ -202,11 +212,15 @@ export function BlockEditor({
         notesRef.current = notes;
     }, [notes]);
 
-    // Memoize title map for dynamic wiki link titles
-    const titleMap = useMemo(() => {
-        const map: Record<string, string> = {};
-        notes?.forEach(n => map[n.id] = n.title);
-        return map;
+    // Memoize title maps for dynamic wiki link titles and resolution
+    const titleMaps = useMemo(() => {
+        const idToTitle: Record<string, string> = {};
+        const titleToId: Record<string, string> = {};
+        notes?.forEach(n => {
+            idToTitle[n.id] = n.title;
+            titleToId[n.title] = n.id;
+        });
+        return { idToTitle, titleToId };
     }, [notes]);
 
     // Track callbacks in refs to avoid re-creating suggestion menu
@@ -230,6 +244,8 @@ export function BlockEditor({
             .map(note => ({
                 title: note.title,
                 onItemClick: () => {
+                    // Ensure focus is in the editor before inserting
+                    editorInstance.focus();
                     // Insert proper wiki link inline content with data-id for graph and click handling
                     editorInstance.insertInlineContent([
                         {
@@ -262,8 +278,12 @@ export function BlockEditor({
                     // Create the note first to get its ID
                     let newNoteId: string | undefined;
                     if (onCreateNoteRef.current) {
-                        newNoteId = await onCreateNoteRef.current(noteTitle);
+                        newNoteId = await onCreateNoteRef.current(noteTitle, false); // false = stay in current note
                     }
+
+                    // Re-focus the editor before insertion, especially important after async note creation
+                    editorInstance.focus();
+
                     // Insert proper wiki link with the new note's ID if available
                     editorInstance.insertInlineContent([
                         {
@@ -433,12 +453,28 @@ export function BlockEditor({
 
         const handleClick = (e: Event) => {
             const target = e.target as HTMLElement;
-            // Check if clicked element is a wiki link (we'll add this class in custom inline content)
-            if (target.closest('.wiki-link')) {
-                const link = target.closest('.wiki-link') as HTMLElement;
+            const link = target.closest('.wiki-link') as HTMLElement;
+            if (link) {
                 const noteId = link.getAttribute('data-id');
-                if (noteId) {
-                    onNoteSelect(noteId);
+                const isUnresolved = link.getAttribute('data-is-unresolved') === 'true';
+                const title = (link.textContent || '').trim();
+
+                // If unresolved, try to resolve by title first before creating a new one
+                if (isUnresolved) {
+                    const resolvedId = titleMaps.titleToId[title];
+                    if (resolvedId) {
+                        // Found a matching note by title! Navigate to it instead of creating
+                        onNoteSelect?.(resolvedId);
+                        return;
+                    }
+
+                    if (onCreateNote) {
+                        // Simple approach: create note and navigate immediately
+                        // The wiki link will resolve via titleToId when user returns to this note
+                        onCreateNote(title, true); // switchToNote: true - let it handle navigation
+                    }
+                } else if (noteId) {
+                    onNoteSelect?.(noteId);
                 }
             }
         };
@@ -450,7 +486,7 @@ export function BlockEditor({
         return () => {
             editorElement?.removeEventListener('click', handleClick);
         };
-    }, [editor, onNoteSelect]);
+    }, [editor, onNoteSelect, titleMaps, onCreateNote]);
 
     // Conflict view - render two editors side by side
     if (conflictContent && conflictContent.trim()) {
@@ -488,7 +524,7 @@ export function BlockEditor({
                             YOUR VERSION (EDIT HERE)
                         </div>
                         <div className="flex-1 overflow-y-auto">
-                            <NoteTitleContext.Provider value={titleMap}>
+                            <NoteTitleContext.Provider value={titleMaps}>
                                 <BlockNoteView
                                     editor={editor}
                                     onChange={handleChange}
@@ -516,7 +552,7 @@ export function BlockEditor({
     // Normal editor mode
     return (
         <div className={`block-editor ${className} ${!editable ? 'readonly' : ''}`}>
-            <NoteTitleContext.Provider value={titleMap}>
+            <NoteTitleContext.Provider value={titleMaps}>
                 <BlockNoteView
                     editor={editor}
                     onChange={handleChange}

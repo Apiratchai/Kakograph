@@ -112,6 +112,12 @@ export default function NoteGraph({ notes, onNodeClick, onNodeHover, highlighted
                 tags: [] as string[],
             };
 
+            // If this is a new node (no existing position), spawn near center
+            if (!existingNode) {
+                node.x = (Math.random() - 0.5) * 50;
+                node.y = (Math.random() - 0.5) * 50;
+            }
+
             // Update the map for next time
             persistentNodes.current.set(n.id, node);
             return node;
@@ -159,7 +165,20 @@ export default function NoteGraph({ notes, onNodeClick, onNodeHover, highlighted
                 const doc = parser.parseFromString(sourceNote.content, 'text/html');
                 const linkElements = doc.querySelectorAll('.wiki-link');
                 linkElements.forEach(el => {
-                    const targetId = el.getAttribute('data-id');
+                    let targetId = el.getAttribute('data-id');
+
+                    // Fallback: resolve by title if noteId is missing or doesn't exist
+                    if (!targetId || !nodeIds.has(targetId)) {
+                        const title = el.textContent?.trim();
+                        if (title) {
+                            // Find note by title
+                            const noteByTitle = nodes.find(n => n.name === title);
+                            if (noteByTitle) {
+                                targetId = noteByTitle.id;
+                            }
+                        }
+                    }
+
                     if (targetId && nodeIds.has(targetId)) {
                         const exists = links.some(l => l.source === sourceNote.id && l.target === targetId);
                         if (!exists) {

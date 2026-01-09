@@ -581,11 +581,35 @@ export default function WritePage() {
         const linkedIds = new Set<string>([currentNote.id]);
         const parser = new DOMParser();
 
+        // Build title->id map for resolution
+        const titleToId = new Map<string, string>();
+        notes.forEach(n => {
+            // Extract title from content
+            const text = n.content
+                .replace(/<\/(p|h[1-6]|div|li)>/gi, '\n')
+                .replace(/<br\s*\/?>/gi, '\n')
+                .replace(/<[^>]*>/g, '')
+                .trim();
+            const firstLine = text.split('\n').map(l => l.trim()).filter(l => l.length > 0)[0];
+            if (firstLine) {
+                titleToId.set(firstLine, n.id);
+            }
+        });
+
         // 1. Forward links
         try {
             const doc = parser.parseFromString(currentNote.content, 'text/html');
             doc.querySelectorAll('.wiki-link').forEach(el => {
-                const id = el.getAttribute('data-id');
+                let id = el.getAttribute('data-id');
+
+                // Fallback: resolve by title if id is missing or not found
+                if (!id || !notes.find(n => n.id === id)) {
+                    const title = el.textContent?.trim();
+                    if (title && titleToId.has(title)) {
+                        id = titleToId.get(title)!;
+                    }
+                }
+
                 if (id) linkedIds.add(id);
             });
         } catch (e) {
@@ -593,10 +617,37 @@ export default function WritePage() {
         }
 
         // 2. Backlinks (scan all other notes)
+        // Get current note's title for title-based backlink detection
+        const currentTitle = (() => {
+            const text = currentNote.content
+                .replace(/<\/(p|h[1-6]|div|li)>/gi, '\n')
+                .replace(/<br\s*\/?>/gi, '\n')
+                .replace(/<[^>]*>/g, '')
+                .trim();
+            return text.split('\n').map(l => l.trim()).filter(l => l.length > 0)[0] || '';
+        })();
+
         notes.forEach(note => {
             if (note.id === currentNote.id) return;
+
+            // Check by data-id
             if (note.content.includes(`data-id="${currentNote.id}"`)) {
                 linkedIds.add(note.id);
+                return;
+            }
+
+            // Fallback: check if any wiki link text matches our title
+            if (currentTitle) {
+                try {
+                    const doc = parser.parseFromString(note.content, 'text/html');
+                    const hasBacklink = Array.from(doc.querySelectorAll('.wiki-link'))
+                        .some(el => el.textContent?.trim() === currentTitle);
+                    if (hasBacklink) {
+                        linkedIds.add(note.id);
+                    }
+                } catch (e) {
+                    // Ignore parsing errors
+                }
             }
         });
 
@@ -1417,9 +1468,9 @@ export default function WritePage() {
                             notes={notes}
                             onNoteSelect={selectNote}
                             // Create new note in root folder (no folder specified)
-                            // Pass switchToNote=false to stay on current note when creating via wiki link
-                            onCreateNote={async (title) => {
-                                const newNoteId = await createNewNote(undefined, title, false);
+                            // default switchToNote=false to stay on current note when creating via suggestion menu
+                            onCreateNote={async (title, switchToNote = false) => {
+                                const newNoteId = await createNewNote(undefined, title, switchToNote);
                                 return newNoteId;
                             }}
                             className="bg-transparent min-h-full"
