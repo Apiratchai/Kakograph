@@ -113,7 +113,7 @@ export function WikiLinkController({ editor, getItems }: WikiLinkControllerProps
     useEffect(() => {
         if (!editor) return;
 
-        const handleKeyDown = (e: KeyboardEvent) => {
+        const handleKeyDown = async (e: KeyboardEvent) => {
             if (!isOpenRef.current) return;
 
             if (e.key === "ArrowUp") {
@@ -130,28 +130,27 @@ export function WikiLinkController({ editor, getItems }: WikiLinkControllerProps
 
                 const item = itemsRef.current[selectedIndexRef.current];
                 if (item && item.onItemClick) {
-                    // Before inserting, we need to delete the [[query part
-                    // Access ProseMirror transaction for atomic delete + insert
-                    const view = editor.prosemirrorView;
-                    const state = view.state;
-                    const $from = state.selection.$from;
-                    const queryLen = queryRef.current.length;
+                    try {
+                        // Before inserting, we need to delete the [[query part
+                        // Access ProseMirror transaction for atomic delete + insert
+                        const view = editor.prosemirrorView;
+                        const state = view.state;
+                        const $from = state.selection.$from;
+                        const queryLen = queryRef.current.length;
 
-                    // Transaction: Delete [[ + query, then run onItemClick logic
-                    // Actually, onItemClick in our implementation calls editor.insertInlineContent
-                    // insertInlineContent usually inserts at cursor. 
-                    // We should delete the trigger chars first.
+                        // Delete the `[[` + `query`
+                        const tr = state.tr.delete($from.pos - (2 + queryLen), $from.pos);
+                        view.dispatch(tr);
 
-                    // Delete the `[[` + `query`
-                    // Length to delete = 2 + query length
-                    const tr = state.tr.delete($from.pos - (2 + queryLen), $from.pos);
-                    view.dispatch(tr);
+                        // Ensure editor is focused before insertion (critical for async actions)
+                        editor.focus();
 
-                    // Now call the item click which inserts the wiki link block
-                    // @ts-ignore
-                    item.onItemClick();
-
-                    setIsOpen(false);
+                        // Now call the item click which inserts the wiki link block
+                        // @ts-ignore
+                        await item.onItemClick();
+                    } finally {
+                        setIsOpen(false);
+                    }
                 }
             } else if (e.key === "Escape") {
                 e.preventDefault();
@@ -201,19 +200,23 @@ export function WikiLinkController({ editor, getItems }: WikiLinkControllerProps
             <WikiLinkSuggestionMenu
                 items={items}
                 selectedIndex={selectedIndex}
-                onItemClick={(item) => {
-                    // Same logic as Enter key
-                    const view = editor!.prosemirrorView;
-                    const state = view.state;
-                    const $from = state.selection.$from;
-                    const queryLen = queryRef.current.length;
+                onItemClick={async (item: any) => {
+                    try {
+                        const view = editor!.prosemirrorView;
+                        const state = view.state;
+                        const $from = state.selection.$from;
+                        const queryLen = queryRef.current.length;
 
-                    const tr = state.tr.delete($from.pos - (2 + queryLen), $from.pos);
-                    view.dispatch(tr);
+                        const tr = state.tr.delete($from.pos - (2 + queryLen), $from.pos);
+                        view.dispatch(tr);
 
-                    // @ts-ignore
-                    item.onItemClick && item.onItemClick();
-                    setIsOpen(false);
+                        editor.focus();
+
+                        // @ts-ignore
+                        await item.onItemClick?.();
+                    } finally {
+                        setIsOpen(false);
+                    }
                 }}
             />
         </div>,
