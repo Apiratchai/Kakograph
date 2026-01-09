@@ -111,7 +111,9 @@ export default function WritePage() {
         permanentlyDeleteNotes,
         trashCount,
         clearAllNotes, // For full snapshot restore
-        wipeLocalData
+        wipeLocalData,
+        exportEncryptedBackup,
+        importEncryptedBackup
     } = useNotes();
 
     const [content, setContent] = useState('');
@@ -435,27 +437,22 @@ export default function WritePage() {
         router.push('/');
     };
 
-    // Export Notes
-    const handleExport = () => {
-        if (notes.length === 0) return showAlert('Export Failed', 'No notes to export.');
-
-        const data = {
-            version: 1,
-            exportedAt: new Date().toISOString(),
-            notes: notes,
-            trash: trash,
-            emptyFolders: Array.from(tempFolders) // Include empty folders
-        };
-
-        const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = `kakograph-backup-${new Date().toISOString().slice(0, 10)}.json`;
-        document.body.appendChild(a);
-        a.click();
-        document.body.removeChild(a);
-        URL.revokeObjectURL(url);
+    // Export Notes (Secure)
+    const handleExport = async () => {
+        try {
+            const blob = await exportEncryptedBackup();
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `kakograph-encrypted-backup-${new Date().toISOString().slice(0, 10)}.json`;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+        } catch (err) {
+            console.error(err);
+            showAlert('Export Failed', 'Failed to generate backup.');
+        }
     };
 
     // Empty Trash
@@ -488,7 +485,17 @@ export default function WritePage() {
                 throw new Error('Invalid backup format');
             }
 
-            // Improve: Show loading state
+            // Stat Calculation for Encrypted Backup
+            // data.notes is an array of EncryptedNote objects
+            // We need to check 'deleted' field
+            let activeCount = 0;
+            let trashCount = 0;
+
+            data.notes.forEach((n: any) => {
+                if (n.deleted) trashCount++;
+                else activeCount++;
+            });
+
             const confirmImport = () => {
                 (async () => {
                     // FULL SNAPSHOT: Clear all existing notes first
@@ -497,33 +504,16 @@ export default function WritePage() {
                     // Clear empty folders state
                     setTempFolders(new Set());
 
-                    // Import active notes
-                    for (const note of data.notes) {
-                        await importNote(note, false); // false = not deleted
-                    }
-                    // Import trash notes (if present in backup)
-                    if (Array.isArray(data.trash)) {
-                        for (const note of data.trash) {
-                            await importNote(note, true); // true = deleted
-                        }
-                    }
-                    // Restore empty folders (if present in backup)
-                    if (Array.isArray(data.emptyFolders)) {
-                        setTempFolders(new Set(data.emptyFolders));
-                    }
+                    // Use Secure Import
+                    await importEncryptedBackup(file);
 
-                    await loadNotes(true);
-                    showAlert('Restore Successful', 'All notes restored from backup.');
+                    showAlert('Restore Successful', 'All encrypted notes restored from backup.');
                 })();
             };
 
-            const trashCount = Array.isArray(data.trash) ? data.trash.length : 0;
-            const folderCount = Array.isArray(data.emptyFolders) ? data.emptyFolders.length : 0;
-            const totalNotes = data.notes.length + trashCount;
-
             showConfirm(
                 'Restore from Backup',
-                `This will REPLACE all your current data with:\n• ${data.notes.length} active notes\n• ${trashCount} trashed notes\n• ${folderCount} empty folders\n\nThis action cannot be undone. Continue?`,
+                `This will REPLACE all your current data with:\n• ${activeCount} active notes\n• ${trashCount} trashed notes\n(Encrypted Backup detected)\n\nThis action cannot be undone. Continue?`,
                 confirmImport,
                 true // isDestructive
             );
@@ -1019,9 +1009,14 @@ export default function WritePage() {
                                                         draggable
                                                         onDragStart={(e) => handleDragStart(e, note.id)}
                                                     >
-                                                        <div className="note-title truncate">
-                                                            {note.conflictContent && <span className="mr-1" title="Conflict Detected">⚠️</span>}
-                                                            {note.title || 'Untitled'}
+                                                        <div className="note-info overflow-hidden">
+                                                            <div className="note-title truncate">
+                                                                {note.conflictContent && <span className="mr-1" title="Conflict Detected">⚠️</span>}
+                                                                {note.title || 'Untitled'}
+                                                            </div>
+                                                            <div className="note-date">
+                                                                {new Date(note.updatedAt).toLocaleDateString()}
+                                                            </div>
                                                         </div>
                                                         <button
                                                             className="delete-button"
@@ -1140,64 +1135,84 @@ export default function WritePage() {
                                                     </div>
                                                 </div>
                                                 <ul className="pl-4 space-y-0.5 border-l border-border ml-1">
-                                                    {trashGroups[folder].map(note => (
-                                                        <li key={note.id} className="note-item opacity-60 hover:opacity-100 group">
-                                                            <div className="note-info overflow-hidden">
-                                                                <div className="note-title line-through text-muted-foreground group-hover:text-foreground transition-colors text-xs">{note.title || 'Untitled'}</div>
-                                                            </div>
-                                                            <div className="flex items-center gap-1 opacity-60 group-hover:opacity-100 transition-opacity">
-                                                                <button
-                                                                    className="p-1 hover:text-green-400 text-slate-600"
-                                                                    onClick={(e) => { e.stopPropagation(); restoreNoteAsRoot(note.id); }}
-                                                                    title="Restore to Root"
-                                                                >
-                                                                    <Upload size={12} className="rotate-90" />
-                                                                </button>
-                                                                <button
-                                                                    className="p-1 hover:text-red-500 text-slate-600"
-                                                                    onClick={(e) => {
-                                                                        e.stopPropagation();
-                                                                        showConfirm('Delete Note', 'Permanently delete this note?', () => permanentlyDeleteNote(note.id), true);
-                                                                    }}
-                                                                    title="Delete Forever"
-                                                                >
-                                                                    &times;
-                                                                </button>
-                                                            </div>
-                                                        </li>
-                                                    ))}
+                                                    {trashGroups[folder].map(note => {
+                                                        const daysLeft = Math.ceil((30 * 24 * 60 * 60 * 1000 - (Date.now() - (note.deletedAt || 0))) / (24 * 60 * 60 * 1000));
+                                                        const expiresText = daysLeft > 0 ? `Expires in ${daysLeft} days` : 'Expires soon';
+
+                                                        return (
+                                                            <li key={note.id} className="note-item opacity-60 hover:opacity-100 group">
+                                                                <div className="note-info overflow-hidden">
+                                                                    <div className="note-title line-through text-muted-foreground group-hover:text-foreground transition-colors text-xs">
+                                                                        {note.title || 'Untitled'}
+                                                                    </div>
+                                                                    <div className="text-[10px] text-red-500/60 font-medium">
+                                                                        {expiresText}
+                                                                    </div>
+                                                                </div>
+                                                                <div className="flex items-center gap-1 opacity-60 group-hover:opacity-100 transition-opacity">
+                                                                    <button
+                                                                        className="p-1 hover:text-green-400 text-slate-600"
+                                                                        onClick={(e) => { e.stopPropagation(); restoreNoteAsRoot(note.id); }}
+                                                                        title="Restore to Root"
+                                                                    >
+                                                                        <Upload size={12} className="rotate-90" />
+                                                                    </button>
+                                                                    <button
+                                                                        className="p-1 hover:text-red-500 text-slate-600"
+                                                                        onClick={(e) => {
+                                                                            e.stopPropagation();
+                                                                            showConfirm('Delete Note', 'Permanently delete this note?', () => permanentlyDeleteNote(note.id), true);
+                                                                        }}
+                                                                        title="Delete Forever"
+                                                                    >
+                                                                        &times;
+                                                                    </button>
+                                                                </div>
+                                                            </li>
+                                                        );
+                                                    })}
                                                 </ul>
                                             </div>
                                         ))}
 
                                         {/* Trashed Root Notes */}
                                         <ul className="space-y-0.5 mt-2">
-                                            {trashGroups['ROOT'].map(note => (
-                                                <li key={note.id} className="note-item opacity-60 hover:opacity-100 group">
-                                                    <div className="note-info overflow-hidden">
-                                                        <div className="note-title line-through text-slate-500 group-hover:text-slate-400 transition-colors text-xs">{note.title || 'Untitled'}</div>
-                                                    </div>
-                                                    <div className="flex items-center gap-1 opacity-60 group-hover:opacity-100 transition-opacity">
-                                                        <button
-                                                            className="p-1 hover:text-green-400 text-slate-600"
-                                                            onClick={(e) => { e.stopPropagation(); restoreNote(note.id); }}
-                                                            title="Restore"
-                                                        >
-                                                            <Upload size={12} className="rotate-90" />
-                                                        </button>
-                                                        <button
-                                                            className="p-1 hover:text-red-500 text-slate-600"
-                                                            onClick={(e) => {
-                                                                e.stopPropagation();
-                                                                showConfirm('Delete Note', 'Permanently delete this note?', () => permanentlyDeleteNote(note.id), true);
-                                                            }}
-                                                            title="Delete Forever"
-                                                        >
-                                                            &times;
-                                                        </button>
-                                                    </div>
-                                                </li>
-                                            ))}
+                                            {trashGroups['ROOT'].map(note => {
+                                                const daysLeft = Math.ceil((30 * 24 * 60 * 60 * 1000 - (Date.now() - (note.deletedAt || 0))) / (24 * 60 * 60 * 1000));
+                                                const expiresText = daysLeft > 0 ? `Expires in ${daysLeft} days` : 'Expires soon';
+
+                                                return (
+                                                    <li key={note.id} className="note-item opacity-60 hover:opacity-100 group">
+                                                        <div className="note-info overflow-hidden">
+                                                            <div className="note-title line-through text-slate-500 group-hover:text-slate-400 transition-colors text-xs">
+                                                                {note.title || 'Untitled'}
+                                                            </div>
+                                                            <div className="text-[10px] text-red-500/60 font-medium">
+                                                                {expiresText}
+                                                            </div>
+                                                        </div>
+                                                        <div className="flex items-center gap-1 opacity-60 group-hover:opacity-100 transition-opacity">
+                                                            <button
+                                                                className="p-1 hover:text-green-400 text-slate-600"
+                                                                onClick={(e) => { e.stopPropagation(); restoreNote(note.id); }}
+                                                                title="Restore"
+                                                            >
+                                                                <Upload size={12} className="rotate-90" />
+                                                            </button>
+                                                            <button
+                                                                className="p-1 hover:text-red-500 text-slate-600"
+                                                                onClick={(e) => {
+                                                                    e.stopPropagation();
+                                                                    showConfirm('Delete Note', 'Permanently delete this note?', () => permanentlyDeleteNote(note.id), true);
+                                                                }}
+                                                                title="Delete Forever"
+                                                            >
+                                                                &times;
+                                                            </button>
+                                                        </div>
+                                                    </li>
+                                                );
+                                            })}
                                         </ul>
                                     </>
                                 )}

@@ -131,11 +131,6 @@ export function useNotes() {
                         } catch (e) {
                             console.warn(`Failed to decrypt folder for note ${note.id}`, e);
                         }
-                        try {
-                            folder = await decryptText(note.encryptedFolder, encryptionKey);
-                        } catch (e) {
-                            console.warn(`Failed to decrypt folder for note ${note.id}`, e);
-                        }
                     } else if ((note as any).folder) {
                         // Legacy support during migration
                         folder = (note as any).folder;
@@ -686,6 +681,22 @@ export function useNotes() {
         }
     }, [storage, seedId]);
 
+    // Secure Export
+    const exportEncryptedBackup = useCallback(async (): Promise<Blob> => {
+        return await storage.exportAll();
+    }, [storage]);
+
+    // Secure Import
+    const importEncryptedBackup = useCallback(async (data: Blob): Promise<void> => {
+        // Clear existing data first? Or merge?
+        // The implementation in indexeddb-provider uses bulkPut which overwrites by ID.
+        // For a full restore, we might want to clear first, but bulkPut is safer for merging.
+        // However, usually backups imply "restore state".
+        // Let's stick to storage.importAll implementation.
+        await storage.importAll(data);
+        await loadNotes(true);
+    }, [storage, loadNotes]);
+
 
     // Override saveNote to push to sync
     // ... we already refactored saveNote below, but let's keep the flow.
@@ -912,6 +923,8 @@ export function useNotes() {
         moveNote: moveNoteWithSync,
         updateNoteLocal,
         clearAllNotes, // For full snapshot restore
-        wipeLocalData: clearAllNotes // Exposed for UI "Clear Local Data"
+        wipeLocalData: clearAllNotes, // Exposed for UI "Clear Local Data"
+        exportEncryptedBackup,
+        importEncryptedBackup
     };
 }
